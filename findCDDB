@@ -1,0 +1,79 @@
+#! /usr/bin/perl
+
+use CDDB::File;
+use MP3::Tag;
+use Getopt::Long;
+
+# Set up options processing
+$cddbDir = $ENV{"HOME"} . "/.cddb";
+$help = 0;
+
+$result = GetOptions(
+		     "cddb=s" => \$cddbDir,
+		     "help" => \$help
+		     );
+
+if (!$result)
+{
+    print "GetOptions failed: $result\n";
+}
+
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+loadCDDB() || die "Could not read CDDB Directory: $cddbDir\n";
+
+## Now, parse the various files
+foreach $file (@ARGV)
+{
+    $mp3 = MP3::Tag->new($file) || die "Could not read $file\n";
+    $mp3->get_tags() || die "Could not get tags in $file\n";
+    if (!defined $mp3->{ID3v2})
+    {
+	print "$file: No ID3v2 tag\n";
+    } else {
+	my $cddb = findCDDB($mp3);
+	if (defined $cddb) {
+	    print "$file: Tagging with ID: ", $cddb->id, "\n";
+	    $mp3->{ID3v2}->remove_frame("TXXX");
+	    $mp3->{ID3v2}->add_frame("TXXX", "CDDB", $cddb->id);
+	    $mp3->{ID3v2}->write_tag();
+	} else {
+	    print "$file: DISCID not found\n";
+	}
+    }
+    $mp3->close();
+}
+
+sub findCDDB {
+    my $mp3 = shift;
+
+    foreach $key (keys %DB)
+    {
+	my $cddb = $DB{$key};
+	if ($cddb->title eq $mp3->album && $cddb->artist eq $mp3->artist) {
+	    return $cddb;
+	}
+    }
+    return undef;
+}
+
+sub loadCDDB {
+    opendir (CDDBDIR, $cddbDir) || return 0;
+    my @files = readdir(CDDBDIR);
+    closedir CDDBDIR;
+    my $file;
+    foreach $file (@files) {
+	my $path = $cddbDir . "/" . $file;
+	next if (-d $path);
+	my $cddb = CDDB::File->new($path) || return 0;
+	$DB{$file} = $cddb;
+    }
+    return 1;
+}
+
+sub usage {
+    print "Usage\n";
+}
