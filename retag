@@ -1,0 +1,98 @@
+#! /usr/bin/perl
+
+use CDDB::File;
+use MP3::Tag;
+use Getopt::Long;
+use Unicode::String;
+
+# Set up options processing
+$cddbDir	= $ENV{"HOME"} . "/.cddb";
+$cddbFile	= undef;
+$cddbID		= undef;
+$trackNumber	= -1;
+$help		= 0;
+
+$cddb = undef;
+
+$result = GetOptions(
+		     "db=s" => \$cddbDir,
+		     "cddb=s" => \$cddbFile,
+		     "id=s" => \$cddbID,
+		     "track=i" => \&trackNumber,
+		     "help" => \$help
+		     );
+
+if (!$result)
+{
+    print "Invalid options\n";
+}
+
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+if (defined $cddbFile)
+{
+    $cddb = CDDB::File->new($cddbFile) || die "Could not open CDDB file $cddbFile\n";
+}
+
+$numFailures = 0;
+
+## Now, parse the various files
+foreach $file (@ARGV)
+{
+    my $result = setTags($file, $trackNumber, $cddbID, $cddb);
+    if ($result ne 0)
+    {
+	chomp $result;
+	print $result, "\n";
+	$numFailures++;
+    }
+}
+
+$numFailures;
+
+sub usage {
+    print "Usage\n";
+}
+
+sub setTags {
+    my ($file, $track, $discid, $cddb) = @_;
+    print "Setting tags in $file\n";
+
+    my $mp3 = MP3::Tag->new($file) 	|| return "Could not read $file\n";
+    $mp3->get_tags()	  		|| return "Could not get tags in $file\n";
+
+    my $id3v2 = $mp3->{ID3v2};
+    my $id3v1 = $mp3->{ID3v1};
+
+    ## If no CDDB file is specified, let's get one.
+    if (!defined $cddb) {
+    	if (!defined $discid) {
+	    return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $id3v2);
+	    my ($txxx, $name) = $id3v2->get_frame("TXXX");
+	    return "No CDDB DISCID (no TXXX CDDB frame) available in $file.  Must set on command line\n" unless (defined $txxx);
+	    return "TXXX Frame is not CDDB: " . $txxx->{"Description"} if (!($txxx->{"Description"} eq "CDDB"));
+	    $discid = $txxx->{"Text"};
+	}
+	my $filename = $cddbDir . "/" . $discid;
+	$cddb = CDDB::File->new($filename) || return "Could not open CDDB file $filename\n";
+    }
+
+    if ($track < 1)
+    {
+	$track = $mp3->track() || return "Could not get track in $file.  Must set on command line\n";
+    }
+
+    $mp3->close();
+    0;
+}
+
+sub translate {
+    my $string = shift;
+    if ($latin1) {
+	$string = Unicode::String::latin1($string)->utf8();
+    } 
+    $string;
+}

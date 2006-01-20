@@ -1,0 +1,117 @@
+#! /usr/bin/perl
+
+use Getopt::Long;
+use Sys::Hostname;
+
+# Set up options processing
+
+$dir	  = "/tmp/music";
+$mail  = $ENV{"USER"} . "@" . hostname();
+$help  = 0;
+$sleep = 30;
+$verbose = 0;
+$maxLoops = 0;
+$quietABCDE = 1;
+
+$result = GetOptions(
+		     "dir=s" => \$dir,
+		     "sleep=i" => \$sleep,
+		     "verbose!" => \$verbose,
+		     "maxloops=i" => \$maxLoops,
+		     "quietabcde!" => \$quietABCDE,
+		     "help" => \$help
+		     );
+
+if (!$result)
+{
+    print "GetOptions failed: $result\n";
+}
+
+chdir $dir || die "Could not change to target directory: $dir\n";
+
+$loops = 0;
+
+while (1)
+{
+    ## Keep a count of how many were processed on this iteration.
+    ## If greater than 0, we won't sleep.
+    $processed = 0;
+    opendir(DIRHANDLE, $dir);
+    @entries = readdir(DIRHANDLE);
+    closedir(DIRHANDLE);
+
+    foreach $entry (@entries)
+    {
+	next if (!($entry =~ /^abcde.[0-9a-fA-F]+$/));
+	($abcde, $discid) = split /\./, $entry;
+	if (abcdeReady($entry))
+	{
+	    print "$abcde ($entry) ready\n" if $verbose;
+	    $processed++;
+	    system ("abcde -C $discid");
+	    #checkError($entry, $discid);
+	} else {
+	    print "$abcde ($entry) not ready\n" if $verbose;
+	}
+    }
+
+    $loops++;
+    if ($maxLoops != 0 && $loops >= $maxLoops) {
+	print "Maximum iterations ($maxLoops) reached\n";
+	exit;
+    }
+
+    if (!$processed)
+    {
+	print "Sleeping for $sleep minutes\n" if $verbose;
+	sleep ($sleep * 60);
+    }
+}
+
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+sub abcdeReady {
+    my $abcdeDir = shift;
+    return 0 if (!-d $abcdeDir);
+    return 0 if (!-e "$abcdeDir/status");
+    return 0 if (!-e "$abcdeDir/cdparanoia-audio-tracks");
+    return 0 if (-e "$abcdeDir/errors");
+
+    open PARANOIA, "$abcdeDir/cdparanoia-audio-tracks" || return 0;
+    while (<PARANOIA>)
+    {
+	chomp;
+	$tracks = $_;
+    }
+    close PARANOIA;
+    print "$abcdeDir: Tracks $tracks\n" if $verbose;
+
+    my $readsComplete = 0;
+    open STATUS, "$abcdeDir/status" || return 0;
+    while (<STATUS>) {
+	chomp;
+	$readsComplete++ if (/readtrack-[0-9]+/);
+    }
+    close STATUS;
+    printf("$abcdeDir: Reads Complete $readsComplete\n") if $verbose;
+
+    return 0 if ($readsComplete != $tracks);
+
+    return 1;
+}
+
+sub checkErrors {
+    my ($entry, $discid) = @_;
+
+    if (-e "$dir/$entry/errors") {
+	my $message = "Encoding run on DISC ID: $discid ($dir/$entry) Failed:\n";
+    }
+}
+
+
+sub usage {
+    print "Usage\n";
+}
