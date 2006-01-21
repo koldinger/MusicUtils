@@ -1,0 +1,98 @@
+#! /usr/bin/perl
+
+use Getopt::Long;
+$maxDisc = 0;
+$maxSize = 650000000;
+
+loadDB("Database.old");
+processDir($ARGV[0]);
+makeDiscs();
+saveDB("Database.new");
+
+sub processDir {
+    my $dir = shift;
+    my @dirs = ();
+    # print "Processing directory $dir\n";
+    opendir(DIRHANDLE, "$dir") || die "Could not open directory $dir\n";
+    my @names = readdir(DIRHANDLE);
+    closedir(DIRHANDLE);
+
+    foreach my $name (@names) {
+	next if $name eq ".";
+	next if $name eq "..";
+	my $file = "$dir/$name";
+	$file =~ s/\/\//\//g;
+	if (-d $file) {
+	    push @dirs, $file;
+	} else {
+	    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
+	    if (!defined $DB{$file} || $DB{$file}->{"mtime"} != $mtime || $DB{$file}->{"size"} != $size) {
+		printf "Updating $file (%d=>%d) (%d=>%d)\n",
+			$DB{$file}->{"mtime"}, $mtime, $DB{$file}->{"size"}, $size;
+		$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir"   => $dir, "disc"  => 0 };
+	    }
+	}
+    }
+    foreach $name (@dirs) {
+	processDir($name);
+    }
+}
+
+sub loadDB {
+    my $db = shift;
+    open DBFILE, "< $db" || return;
+    while (<DBFILE>) {
+	chomp;
+	if (/^MAXDISC\s*\=\s*([0-9]+)\s*$/) {
+	    $maxDisc = $1;
+	    print "Got MAXDISC = $maxDisc\n";
+	    next;
+	}
+	my ($size, $mtime, $disc, $file) = split (/\|/);
+	$dir = $file;
+	$dir =~ s/\/[^\/]+$//g;
+	# print "Loading $file, $dir\n";
+	$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir" => $dir, "disc" => $disc };
+    }
+    close DBFILE;
+}
+
+
+sub saveDB {
+    my $db = shift;
+    open DBFILE, "> $db" || die "Could not save database";
+    print DBFILE "MAXDISC=$maxDisc\n";
+    my @keys = sort { $a cmp $b; } (keys %DB);
+    foreach my $file (@keys) {
+	printf DBFILE "%10d|%10d|%4d|%s\n",
+	    $DB{$file}->{"size"},
+	    $DB{$file}->{"mtime"},
+	    $DB{$file}->{"disc"},
+	    $DB{$file}->{"file"};
+    }
+}
+
+sub makeDiscs {
+    my $discSize = 0;
+    my $disc = $maxDisc + 1;
+    my $added = 0;
+    my @keys = sort { $a cmp $b; } (keys %DB);
+    foreach $file (@keys) {
+	if ($DB{$file}->{"disc"} == 0) {
+	    $added++;
+	    $size = $DB{$file}->{"size"};
+	    if ($discSize + $DB{$file}->{"size"} > $maxSize) {
+		$disc++;
+		$discSize = 0;
+	    }
+	    print "Adding file $file to disc $disc\n";
+	    $DB{$file}->{"disc"} = $disc;
+	    $discSize += $size;
+	}
+    }
+    print "Added $added files.\n";
+    if ($added) {
+	print "Created " . ($disc - $maxDisc) . " new discs\n";
+	$maxDisc = $disc;
+    }
+}
