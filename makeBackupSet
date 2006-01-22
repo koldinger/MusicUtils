@@ -1,18 +1,61 @@
 #! /usr/bin/perl
 
 use Getopt::Long;
-$maxDisc = 0;
-$maxSize = 650000000;
 
-loadDB("Database.old");
-processDir($ARGV[0]);
+$maxDisc = 0;
+$cdsize = 650000;
+$dvdsize = 4500000;
+$dvd2size = 8500000;
+
+$database = "BackupDB";
+$verbose = 0;
+$help = 0;
+$cd = 0;
+$dvd = 0;
+$dvd2 = 0;
+$keepsDirs = 0;
+
+$result = GetOptions(
+                     "verbose!" => \$verbose,
+                     "database=s" => \$database,
+		     "keepdirs!" => \$keepDirs,
+		     "cd" => \$cd,
+		     "dvd" => \$dvd,
+		     "dvd2" => \$dvd2,
+                     "help" => \$help
+                     );
+
+if (!$result)
+{
+    print "GetOptions failed: $result\n";
+}
+if ($cd + $dvd + $dvd2 > 1) {
+    print "Only one of --cd, --dvd, and --dvd2 allowed\n";
+}
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+$discSize = $dvdsize;
+$discSize = $cdsize if ($cd);
+$discSize = $dvdsize if ($dvd);
+$discSize = $dvd2size if ($dvd2);
+
+$backup = $database.".bak";
+
+loadDB($database);
+foreach $dir (@ARGV) {
+    processDir($dir);
+}
 makeDiscs();
-saveDB("Database.new");
+rename($database, $backup);
+saveDB($database);
 
 sub processDir {
     my $dir = shift;
     my @dirs = ();
-    # print "Processing directory $dir\n";
+    print ("Processing directory $dir\n") if ($verbose);
     opendir(DIRHANDLE, "$dir") || die "Could not open directory $dir\n";
     my @names = readdir(DIRHANDLE);
     closedir(DIRHANDLE);
@@ -26,9 +69,11 @@ sub processDir {
 	    push @dirs, $file;
 	} else {
 	    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
-	    if (!defined $DB{$file} || $DB{$file}->{"mtime"} != $mtime || $DB{$file}->{"size"} != $size) {
-		printf "Updating $file (%d=>%d) (%d=>%d)\n",
-			$DB{$file}->{"mtime"}, $mtime, $DB{$file}->{"size"}, $size;
+	    if (!defined $DB{$file} ||
+		$DB{$file}->{"mtime"} != $mtime ||
+		$DB{$file}->{"size"} != $size) {
+		printf ("Updating $file (%d=>%d) (%d=>%d)\n",
+			$DB{$file}->{"mtime"}, $mtime, $DB{$file}->{"size"}, $size) if ($verbose);
 		$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir"   => $dir, "disc"  => 0 };
 	    }
 	}
@@ -45,13 +90,21 @@ sub loadDB {
 	chomp;
 	if (/^MAXDISC\s*\=\s*([0-9]+)\s*$/) {
 	    $maxDisc = $1;
-	    print "Got MAXDISC = $maxDisc\n";
+	    print ("Got MAXDISC=$maxDisc)\n") if ($verbose);
+	    next;
+	}
+	if (/^DISC([0-9]+)\s*=\s*([0-9]+)\s*,\s*([0-9]+)\s*$/) {
+	    my $disc = $1;
+	    my $capacity = $2;
+	    my $used = $3;
+	    $DISCS{$disc} = { "capacity" => $capacity, "used" => $used };
+	    print("Got DISC[$disc]: Capacity: $capacity Used: $used\n") if ($verbose);
 	    next;
 	}
 	my ($size, $mtime, $disc, $file) = split (/\|/);
 	$dir = $file;
 	$dir =~ s/\/[^\/]+$//g;
-	# print "Loading $file, $dir\n";
+	print "Loading $file, $dir\n" if ($verbose);
 	$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir" => $dir, "disc" => $disc };
     }
     close DBFILE;
@@ -62,8 +115,10 @@ sub saveDB {
     my $db = shift;
     open DBFILE, "> $db" || die "Could not save database";
     print DBFILE "MAXDISC=$maxDisc\n";
-    my @keys = sort { $a cmp $b; } (keys %DB);
-    foreach my $file (@keys) {
+    foreach my $disc (sort { $a <=> $b } keys %DISCS) {
+	printf DBFILE "DISC%d=%d,%d\n", $disc, $DISCS{$disc}->{"capacity"} , $DISCS{$disc}->{"used"};
+    }
+    foreach my $file (sort { $a cmp $b; } (keys %DB)) {
 	printf DBFILE "%10d|%10d|%4d|%s\n",
 	    $DB{$file}->{"size"},
 	    $DB{$file}->{"mtime"},
@@ -73,26 +128,47 @@ sub saveDB {
 }
 
 sub makeDiscs {
-    my $discSize = 0;
     my $disc = $maxDisc + 1;
+    $DISCS{$disc} = {"capacity" => $discSize, "used" => 0 };
     my $added = 0;
     my @keys = sort { $a cmp $b; } (keys %DB);
     foreach $file (@keys) {
 	if ($DB{$file}->{"disc"} == 0) {
 	    $added++;
-	    $size = $DB{$file}->{"size"};
-	    if ($discSize + $DB{$file}->{"size"} > $maxSize) {
+	    $size = $DB{$file}->{"size"} / 1024;
+	    if (($DISCS{$disc}->{"used"} + $size) > $DISCS{$disc}->{"capacity"}) {
 		$disc++;
-		$discSize = 0;
+		$DISCS{$disc} = {"capacity" => $discSize, "used" => 0 };
 	    }
-	    print "Adding file $file to disc $disc\n";
+	    print "Adding file $file to disc $disc\n" if ($verbose);
 	    $DB{$file}->{"disc"} = $disc;
-	    $discSize += $size;
+	    $DISCS{$disc}->{"used"} += $size;
 	}
     }
-    print "Added $added files.\n";
+    print "Added $added files.\n" if ($verbose);
     if ($added) {
-	print "Created " . ($disc - $maxDisc) . " new discs\n";
+	print "Created " . ($disc - $maxDisc) . " new discs\n" if ($verbose);
 	$maxDisc = $disc;
     }
 }
+
+sub dirContents {
+    my $dir = shift;
+    my @files;
+    my @keys = sort { $a cmp $b; } (keys %DB);
+    foreach $file (@keys) {
+	if ($DB{$file}->{"dir"} eq $dir) {
+	    push @files, $file;
+	}
+    }
+    return @files;
+}
+sub totalSize {
+    my @files = @_;
+    my $size = 0;
+    foreach my $file (@files) {
+	$size += $DB{$file}->{"size"};
+    }
+    return $size;
+}
+

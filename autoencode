@@ -2,6 +2,8 @@
 
 use Getopt::Long;
 use Sys::Hostname;
+use Sys::Syslog;
+use Mail::Sendmail;
 
 # Set up options processing
 
@@ -11,9 +13,10 @@ $help  = 0;
 $sleep = 30;
 $verbose = 0;
 $maxLoops = 0;
-$quietABCDE = 1;
+$quietABCDE = 0;
 $notify = 0;
 $daemon = 0;
+$script = "/usr/local/bin/abcde";
 
 $result = GetOptions(
 		     "dir=s" => \$dir,
@@ -24,6 +27,7 @@ $result = GetOptions(
 		     "notify!" => \$notify,
 		     "quietabcde!" => \$quietABCDE,
 		     "daemon!" => \$daemon,
+		     "script" => \$script,
 		     "help" => \$help
 		     );
 
@@ -37,7 +41,7 @@ if ($help || !$result) {
 }
 
 if ($daemon) {
-    syslog("Autoencode", "", "user");
+    openlog("Autoencode", "", "user");
 }
 
 $quietABCDE = 1 if ($daemon);
@@ -64,7 +68,10 @@ while (1)
 	{
 	    print "$abcde ($entry) ready\n" if $verbose;
 	    $processed++;
-	    $result = system ("abcde -C $discid");
+	    $command = "$script -C $discid";
+	    $command .= " >& /dev/null" if $quietABCDE;
+	    print "Executing: $command\n" if $verbose;
+	    $result = system ($command);
 	    message("Encoding DISC ID $discid completed.  $result");
 	    checkError($entry, $discid);
 
@@ -88,6 +95,7 @@ while (1)
 
 sub abcdeReady {
     my $abcdeDir = shift;
+    return 0 if (defined $processed{$abcdeDir});
     return 0 if (!-d $abcdeDir);
     return 0 if (!-e "$abcdeDir/status");
     return 0 if (!-e "$abcdeDir/cdparanoia-audio-tracks");
@@ -112,6 +120,7 @@ sub abcdeReady {
     printf("$abcdeDir: Reads Complete $readsComplete\n") if $verbose;
 
     return 0 if ($readsComplete != $tracks);
+    $processed{$abcdeDir} = 1;
 
     return 1;
 }
@@ -123,18 +132,20 @@ sub checkError {
 	message( "Encoding run on DISC ID: $discid ($dir/$entry) Failed");
 	if ($notify)
 	{
-	    my $msgFile = "/tmp/autoencod.$$";
-	    open MESSAGE, "> $msgFile";
+	    my $subject = "Autoencode: Encoding run on DISC ID: $discid ($dir/$entry) Failed";
+	    my $mailMessage =  "Encoding run on DISC ID: $discid Failed\n";
 	    open ERROR, "< $dir/$entry/errors";
-	    print MESSAGE "Encoding run on DISC ID: $discid ($dir/$entry) Failed\n";
 	    while (<ERROR>) {
 		chomp;
-		print MESSAGE $_;
+		$mailMessage .= $_ . "\n";
 	    }
-	    close MESSAGE;
 	    close ERROR;
-	    system("mail $mail < $msgFile");
-	    unlink($msgFile);
+	    my %mail = ( To      => $mail,
+			 From    => "root@" . hostname(),
+			 Subject => $subject,
+			 Message => $mailMessage
+			);
+	    sendmail(%mail) or message("Unable to send mail: " . $Mail::Sendmail::error, "error");
 	}
     }
 }
