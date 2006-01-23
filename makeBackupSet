@@ -93,13 +93,7 @@ sub addDir {
 		if ($size > ($discSize * 1024)) {
 		    print "WARNING: $file is too big to fit on disc.  Skipping.\n";
 		} else {
-		    $DB{$file} = {
-			"file"  => $file,
-			"size"  => $size,
-			"mtime" => $mtime,
-			"dir"   => $dir,
-			"disc"  => 0
-		    };
+		    addFile($file, $size, $mtime, $dir, 0);
 		}
 	    }
 	}
@@ -131,13 +125,7 @@ sub loadDB {
 	$dir = $file;
 	$dir =~ s/\/[^\/]+$//g;
 	print "Loading $file, $dir\n" if ($verbose);
-	$DB{$file} = {
-	    "file"  => $file,
-	    "size"  => $size,
-	    "mtime" => $mtime,
-	    "dir" => $dir,
-	    "disc" => $disc
-	};
+	addFile($file, $size, $mtime, $dir, $disc);
     }
     close DBFILE;
 }
@@ -188,19 +176,13 @@ sub makeDiscs {
 
 sub collectDir {
     my $file = shift;
-    my @files;
     if (!$keepDirs)
     {
-	push @files, $file;
-	return @files;
+	# return a list containing only 1 file.
+	return ($file);
+    } else {
+	return @{$DIR{$DB{$file}->{"dir"}}};
     }
-    my $dir = $DB{$file}->{"dir"};
-    foreach $key (keys %DB) {
-	if ($DB{$key}->{"dir"} eq $dir) {
-	    push @files, $key;
-	}
-    }
-    return sort { $a cmp $b } @files;
 }
 
 sub totalSize {
@@ -210,6 +192,22 @@ sub totalSize {
 	$size += kSize($file);
     }
     return $size;
+}
+
+sub addFile {
+    my ($file, $size, $mtime, $dir, $disc) = @_;
+    $DB{$file} = {
+	"file"  => $file,
+	"size"  => $size,
+	"mtime" => $mtime,
+	"dir"   => $dir,
+	"disc"  => $disc
+	};
+    if (!defined $DIR{$dir}) {
+	$DIR{$dir} = [ $file ];
+    } else {
+	push @{$DIR{$dir}}, $file unless contains ($file, @{$DIR{$dir}});
+    }
 }
 
 sub findDisc {
@@ -246,5 +244,16 @@ sub kSize {
     return ($DB{$file}->{"size"} + 1024) /1024;
 }
 
+sub contains {
+    my $lookFor = shift;
+    foreach my $element (@_)
+    {
+	return 1 if ($lookFor eq $element);
+    }
+    return 0;
+}
+
 sub usage {
 }
+
+
