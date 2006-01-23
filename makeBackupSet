@@ -2,26 +2,35 @@
 
 use Getopt::Long;
 
-$maxDisc = 0;
-$cdsize = 650000;
-$dvdsize = 4500000;
-$dvd2size = 8500000;
+## Constants
+$cdsize		= 650000;
+$dvdsize	= 4500000;
+$dvd2size	= 8500000;
 
-$database = "BackupDB";
-$verbose = 0;
-$help = 0;
-$cd = 0;
-$dvd = 0;
-$dvd2 = 0;
-$keepsDirs = 0;
+## Globals
+$maxDisc	= 0;
+$newMaxDisc	= undef;
+
+## Options, w/ default values
+$database	= "BackupDB";
+$verbose	= 0;
+$help		= 0;
+$cd		= 0;
+$dvd		= 0;
+$dvd2		= 0;
+$size		= 0;
+$keepDirs	= 0;
+$pack		= 0;
 
 $result = GetOptions(
                      "verbose!" => \$verbose,
                      "database=s" => \$database,
 		     "keepdirs!" => \$keepDirs,
+		     "pack" => \$pack,
 		     "cd" => \$cd,
 		     "dvd" => \$dvd,
 		     "dvd2" => \$dvd2,
+		     "size=i" => \$size,
                      "help" => \$help
                      );
 
@@ -31,6 +40,11 @@ if (!$result)
 }
 if ($cd + $dvd + $dvd2 > 1) {
     print "Only one of --cd, --dvd, and --dvd2 allowed\n";
+    $result = 0;
+}
+if ($size && ($cd || $dvd || $dvd2)) {
+    print "Can't set size and disc type\n";
+    $result = 0;
 }
 if ($help || !$result) {
     usage();
@@ -41,18 +55,19 @@ $discSize = $dvdsize;
 $discSize = $cdsize if ($cd);
 $discSize = $dvdsize if ($dvd);
 $discSize = $dvd2size if ($dvd2);
+$discSize = $size if ($size);
 
 $backup = $database.".bak";
 
 loadDB($database);
 foreach $dir (@ARGV) {
-    processDir($dir);
+    addDir($dir);
 }
 makeDiscs();
 rename($database, $backup);
 saveDB($database);
 
-sub processDir {
+sub addDir {
     my $dir = shift;
     my @dirs = ();
     print ("Processing directory $dir\n") if ($verbose);
@@ -68,18 +83,29 @@ sub processDir {
 	if (-d $file) {
 	    push @dirs, $file;
 	} else {
-	    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev, $size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
+	    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev,
+		$size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
 	    if (!defined $DB{$file} ||
 		$DB{$file}->{"mtime"} != $mtime ||
 		$DB{$file}->{"size"} != $size) {
-		printf ("Updating $file (%d=>%d) (%d=>%d)\n",
-			$DB{$file}->{"mtime"}, $mtime, $DB{$file}->{"size"}, $size) if ($verbose);
-		$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir"   => $dir, "disc"  => 0 };
+		print ("New file $file\n") if ($verbose && !(defined $DB{$file}));
+		print ("Updated file $file\n") if ($verbose && (defined $DB{$file}));
+		if ($size > ($discSize * 1024)) {
+		    print "WARNING: $file is too big to fit on disc.  Skipping.\n";
+		} else {
+		    $DB{$file} = {
+			"file"  => $file,
+			"size"  => $size,
+			"mtime" => $mtime,
+			"dir"   => $dir,
+			"disc"  => 0
+		    };
+		}
 	    }
 	}
     }
     foreach $name (@dirs) {
-	processDir($name);
+	addDir($name);
     }
 }
 
@@ -105,11 +131,16 @@ sub loadDB {
 	$dir = $file;
 	$dir =~ s/\/[^\/]+$//g;
 	print "Loading $file, $dir\n" if ($verbose);
-	$DB{$file} = { "file"  => $file, "size"  => $size, "mtime" => $mtime, "dir" => $dir, "disc" => $disc };
+	$DB{$file} = {
+	    "file"  => $file,
+	    "size"  => $size,
+	    "mtime" => $mtime,
+	    "dir" => $dir,
+	    "disc" => $disc
+	};
     }
     close DBFILE;
 }
-
 
 sub saveDB {
     my $db = shift;
@@ -128,47 +159,92 @@ sub saveDB {
 }
 
 sub makeDiscs {
-    my $disc = $maxDisc + 1;
-    $DISCS{$disc} = {"capacity" => $discSize, "used" => 0 };
     my $added = 0;
-    my @keys = sort { $a cmp $b; } (keys %DB);
-    foreach $file (@keys) {
+    foreach $file ( sort { $a cmp $b; } (keys %DB)) {
 	if ($DB{$file}->{"disc"} == 0) {
-	    $added++;
-	    $size = $DB{$file}->{"size"} / 1024;
-	    if (($DISCS{$disc}->{"used"} + $size) > $DISCS{$disc}->{"capacity"}) {
-		$disc++;
-		$DISCS{$disc} = {"capacity" => $discSize, "used" => 0 };
+	    my @files = collectDir($file);
+	    my $size = totalSize(@files);
+	    print $size
+	    $added += @files;
+	    my $disc = findDisc($size);
+	    foreach my $file2 (@files) {
+		print "Adding file $file2 to disc $disc\n" if ($verbose);
+		$addedd ++;
+		my $fileSize = kSize($file2);
+		if (($DISCS{$disc}->{"used"} + $kSize) > $DISCS{$disc}->{"capacity"}) {
+		    $disc = newDisc();
+		}
+		$DB{$file2}->{"disc"} = $disc;
+		$DISCS{$disc}->{"used"} += $fileSize;
 	    }
-	    print "Adding file $file to disc $disc\n" if ($verbose);
-	    $DB{$file}->{"disc"} = $disc;
-	    $DISCS{$disc}->{"used"} += $size;
 	}
     }
     print "Added $added files.\n" if ($verbose);
     if ($added) {
-	print "Created " . ($disc - $maxDisc) . " new discs\n" if ($verbose);
-	$maxDisc = $disc;
+	print "Created " . ($newMaxDisc - $maxDisc) . " new discs\n" if ($verbose);
+	$maxDisc = $newMaxDisc;
     }
 }
 
-sub dirContents {
-    my $dir = shift;
+sub collectDir {
+    my $file = shift;
     my @files;
-    my @keys = sort { $a cmp $b; } (keys %DB);
-    foreach $file (@keys) {
-	if ($DB{$file}->{"dir"} eq $dir) {
-	    push @files, $file;
+    if (!$keepDirs)
+    {
+	push @files, $file;
+	return @files;
+    }
+    my $dir = $DB{$file}->{"dir"};
+    foreach $key (keys %DB) {
+	if ($DB{$key}->{"dir"} eq $dir) {
+	    push @files, $key;
 	}
     }
-    return @files;
+    return sort { $a cmp $b } @files;
 }
+
 sub totalSize {
     my @files = @_;
     my $size = 0;
     foreach my $file (@files) {
-	$size += $DB{$file}->{"size"};
+	$size += kSize($file);
     }
     return $size;
 }
 
+sub findDisc {
+    my $size = shift;
+    if (!defined $newMaxDisc) {
+	newDisc();
+    }
+    my $disc;
+    if ($pack) {
+	foreach $disc (($maxDisc + 1) .. $newMaxDisc) {
+	    if (($DISCS{$disc}->{"used"} + $size) < $DISCS{$disc}->{"capacity"}) {
+		return $disc;
+	    }
+	}
+    }
+    $disc = $newMaxDisc;
+    if (($DISCS{$disc}->{"used"} + $size) > $DISCS{$disc}->{"capacity"}) {
+	return newDisc();
+    }
+    return $disc;
+}
+
+sub newDisc {
+    if (!defined $newMaxDisc) {
+	$newMaxDisc = $maxDisc;
+    }
+    $newMaxDisc++;
+    $DISCS{$newMaxDisc} = {"capacity" => $discSize, "used" => 0 };
+    return $newMaxDisc;
+}
+
+sub kSize {
+    my $file = shift;
+    return ($DB{$file}->{"size"} + 1024) /1024;
+}
+
+sub usage {
+}
