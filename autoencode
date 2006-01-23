@@ -4,6 +4,7 @@ use Getopt::Long;
 use Sys::Hostname;
 use Sys::Syslog;
 use Mail::Sendmail;
+use CDDB::File;
 
 # Set up options processing
 
@@ -134,6 +135,10 @@ sub checkError {
 	{
 	    my $subject = "Autoencode: Encoding run on DISC ID: $discid ($dir/$entry) Failed";
 	    my $mailMessage =  "Encoding run on DISC ID: $discid Failed\n";
+	    my $cddb = CDDB::File->new("$dir/$entry/cddbread.1");
+	    $mailMessage .= "Probable Artist: " . $cddb->artist() . "\n";
+	    $mailMessage .= "Probable Title: " . $cddb->title() . "\n";
+	    $mailMessage .= "\n\n";
 	    open ERROR, "< $dir/$entry/errors";
 	    while (<ERROR>) {
 		chomp;
@@ -153,6 +158,7 @@ sub checkError {
 
 sub usage {
     print "Usage\n";
+    print <DATA>;
 }
 
 sub message {
@@ -163,3 +169,15 @@ sub message {
     print $message, "\n" if $verbose;
     syslog("notice", $message) if $daemon;
 }
+
+__DATA__
+	-d dir	--dir=directory		Where to look for abcde files.
+	-s n	--sleep=n		Sleep for N minutes before checking for files again
+	-n	--[no]notify		Send mail for failing runs.
+	-a addr --address=addr		Address to send mail to.
+	-q	--quietabcde		Tell ABCDE to shut up even more.
+	-d	--daemon		Run as a daemon.  Log to syslog.
+	-l i	--loops=i		Run for loops.
+	-s path	--script=path		Path to abcde.
+	-v	--verbose		Talk more to stdout.
+	-h	--help			This screen.

@@ -254,6 +254,15 @@ sub contains {
 }
 
 sub usage {
+    print <DATA>;
 }
-
-
+__DATA__
+	-v	--verbose	print more information
+	-d	--database	database to use.  Default is Backup.
+	-k	--keepdirs	Keep directories packaged together
+	-p	--pack		Attempt to pack disks.
+	-c	--cd		Package for CD's.
+		--dvd		Package for DVD's
+		--dvd2		Package for Dual Layer DVD's
+	-s	--size		Package for size K disks
+	-h	--help		This screen.
