@@ -4,21 +4,22 @@ use CDDB::File;
 use MP3::Tag;
 use Getopt::Long;
 use Unicode::String;
+use File::Spec;
 
 # Set up options processing
 $cddbDir	= $ENV{"HOME"} . "/.cddb";
 $cddbFile	= undef;
 $cddbID		= undef;
-$trackNumber	= -1;
+$trackNumber	= undef;
 $help		= 0;
 
-$cddb = undef;
+$globalCDDB	= undef;
 
 $result = GetOptions(
 		     "db=s" => \$cddbDir,
 		     "cddb=s" => \$cddbFile,
 		     "id=s" => \$cddbID,
-		     "track=i" => \&trackNumber,
+		     "track=i" => \$trackNumber,
 		     "help" => \$help
 		     );
 
@@ -34,7 +35,9 @@ if ($help || !$result) {
 
 if (defined $cddbFile)
 {
-    $cddb = CDDB::File->new($cddbFile) || die "Could not open CDDB file $cddbFile\n";
+    $globalCDDB = CDDB::File->new($cddbFile) || die "Could not open CDDB file $cddbFile\n";
+} else {
+    loadCDDB();
 }
 
 $numFailures = 0;
@@ -67,6 +70,10 @@ sub setTags {
     my $id3v2 = $mp3->{ID3v2};
     my $id3v1 = $mp3->{ID3v1};
 
+    my $cddb 	= $globalCDDB;
+    my $discid 	= $cddbID;
+    my $track 	= $trackNumber;
+
     ## If no CDDB file is specified, let's get one.
     if (!defined $cddb) {
     	if (!defined $discid) {
@@ -76,14 +83,37 @@ sub setTags {
 	    return "TXXX Frame is not CDDB: " . $txxx->{"Description"} if (!($txxx->{"Description"} eq "CDDB"));
 	    $discid = $txxx->{"Text"};
 	}
-	my $filename = $cddbDir . "/" . $discid;
-	$cddb = CDDB::File->new($filename) || return "Could not open CDDB file $filename\n";
+	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
     }
 
-    if ($track < 1)
+    if (!defined $track)
     {
 	$track = $mp3->track() || return "Could not get track in $file.  Must set on command line\n";
     }
+
+    $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
+
+    # remove ID3v1.  We don't need it.
+    $id3v1->remove_tag() if (defined $id3v1);
+    # $id3v2->remove_tag() if (defined $id3v2);
+
+    $id3v2 = $mp3->new_tag("ID3v2");
+    $id3v2->add_frame("TPE1", $trackInfo->artist());
+    $id3v2->add_frame("TALB", $cddb->title());
+    $id3v2->add_frame("TIT2", $trackInfo->title());
+    $id3v2->add_frame("TCON", $cddb->genre());
+    $id3v2->add_frame("TYER", $cddb->year());
+    $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
+    $id3v2->add_frame("TXXX", "CDDB", $cddb->id());
+    # TIT2 (Title/songname/content description): 51 Phantom
+    # TPE1 (Lead performer(s)/Soloist(s)): North Mississippi Allstars
+    # TALB (Album/Movie/Show title): 51 Phantom
+    # TCON (Content type): Blues (0)
+    # TYER (Year): 2001
+    # TSIZ (Size): 128
+    # TRCK (Track number/Position in set): 1
+    # USER (Terms of use):  frame
+    $id3v2->write_tag();
 
     $mp3->close();
     0;
@@ -95,4 +125,36 @@ sub translate {
 	$string = Unicode::String::latin1($string)->utf8();
     } 
     $string;
+}
+
+sub findCDDB {
+    my $id = shift;
+    return $globalCDDB if (defined $globalCDDB);
+    return $CDDB{$id};
+}
+
+sub findTrack {
+    my $cddb = shift;
+    my $trackNo = shift;
+
+    foreach my $track ($cddb->tracks) {
+	return $track if ($track->number == $trackNo);
+    }
+    return undef;
+}
+
+sub loadCDDB {
+    opendir (DIRHANDLE, $cddbDir) || die "Could not open CDDB Database ($cddbDir) for reading\n";
+    my @files = readdir(DIRHANDLE);
+    closedir (DIRHANDLE);
+
+    foreach my $file (@files) {
+	next if ($file =~ /\./);
+	next if ($file =~ /\.\./);
+	my $filename = File::Spec->catfile($cddbDir, $file);
+	my $cddb = CDDB::File->new($filename) || die "Could not open and parse CDDB file $filename\n";
+	foreach my $id ($cddb->all_ids()) {
+	    $CDDB{$id} = $cddb;
+	}
+    }
 }
