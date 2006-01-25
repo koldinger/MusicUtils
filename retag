@@ -56,10 +56,6 @@ foreach $file (@ARGV)
 
 $numFailures;
 
-sub usage {
-    print "Usage\n";
-}
-
 sub setTags {
     my ($file, $track, $discid, $cddb) = @_;
     print "Setting tags in $file\n";
@@ -81,7 +77,8 @@ sub setTags {
 	    my ($txxx, $name) = $id3v2->get_frame("TXXX");
 	    return "No CDDB DISCID (no TXXX CDDB frame) available in $file.  Must set on command line\n" unless (defined $txxx);
 	    return "TXXX Frame is not CDDB: " . $txxx->{"Description"} if (!($txxx->{"Description"} eq "CDDB"));
-	    $discid = $txxx->{"Text"};
+	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+	    ($discid) = split/,/, $txxx->{"Text"};
 	}
 	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
     }
@@ -158,3 +155,13 @@ sub loadCDDB {
 	}
     }
 }
+
+sub usage {
+    print <DATA>;
+}
+__DATA__
+	-d CDDB	--db=s		Where to find the CDDB database.
+	-c file	--cddb=file	Explicit file to read data from.
+	-i ID	--id=id		CDDB ID to use istead of from current tag.
+	-t trk	--track=trk	Track number to use instead of from current tag.
+	-h	--help		This screen.
