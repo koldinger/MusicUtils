@@ -1,15 +1,18 @@
 #! /usr/bin/perl
 
 use Getopt::Long;
+use File::Spec;
+use Cwd;
 
 ## Constants
-$cdsize		= 650000;
+$cdsize		= 640000;
 $dvdsize	= 4500000;
 $dvd2size	= 8500000;
 
 ## Globals
 $maxDisc	= 0;
 $newMaxDisc	= undef;
+$discsCreated	= 0;
 
 ## Options, w/ default values
 $database	= "BackupDB";
@@ -21,17 +24,25 @@ $dvd2		= 0;
 $size		= 0;
 $keepDirs	= 0;
 $pack		= 0;
+$fill		= 0;
+$update		= 0;
+$reset		= 0;
+$abspath	= 0;
 
 $result = GetOptions(
-                     "verbose!" => \$verbose,
-                     "database=s" => \$database,
-		     "keepdirs!" => \$keepDirs,
-		     "pack" => \$pack,
-		     "cd" => \$cd,
-		     "dvd" => \$dvd,
-		     "dvd2" => \$dvd2,
-		     "size=i" => \$size,
-                     "help" => \$help
+                     "verbose+" 	=> \$verbose,
+                     "database|db=s" 	=> \$database,
+		     "keepdirs!"	=> \$keepDirs,
+		     "pack!"		=> \$pack,
+		     "fill!"		=> \$fill,
+		     "abspaths!"	=> \$abspath,
+		     "cd"		=> \$cd,
+		     "dvd"		=> \$dvd,
+		     "dvd2"		=> \$dvd2,
+		     "size=i"		=> \$size,
+		     "update!"		=> \$update,
+		     "reset!"		=> \$reset,
+                     "help"		=> \$help
                      );
 
 if (!$result)
@@ -63,14 +74,20 @@ loadDB($database);
 foreach $dir (@ARGV) {
     addDir($dir);
 }
+
+$newMaxDisc = $maxDisc if ($fill);
+resetDiscs() if ($resetDB);
+updateDB() if ($update);
+
 makeDiscs();
+
 rename($database, $backup);
 saveDB($database);
 
 sub addDir {
     my $dir = shift;
     my @dirs = ();
-    print ("Processing directory $dir\n") if ($verbose);
+    print ("Processing directory $dir\n") if ($verbose > 1);
     opendir(DIRHANDLE, "$dir") || die "Could not open directory $dir\n";
     my @names = readdir(DIRHANDLE);
     closedir(DIRHANDLE);
@@ -78,8 +95,7 @@ sub addDir {
     foreach my $name (@names) {
 	next if $name eq ".";
 	next if $name eq "..";
-	my $file = "$dir/$name";
-	$file =~ s/\/\//\//g;
+	my $file = File::Spec->canonpath(File::Spec->catfile($dir, $name));
 	if (-d $file) {
 	    push @dirs, $file;
 	} else {
@@ -88,8 +104,8 @@ sub addDir {
 	    if (!defined $DB{$file} ||
 		$DB{$file}->{"mtime"} != $mtime ||
 		$DB{$file}->{"size"} != $size) {
-		print ("New file $file\n") if ($verbose && !(defined $DB{$file}));
-		print ("Updated file $file\n") if ($verbose && (defined $DB{$file}));
+		print ("New file $file\n") if ($verbose > 1&& !(defined $DB{$file}));
+		print ("Updated file $file\n") if ($verbose > 1 && (defined $DB{$file}));
 		if ($size > ($discSize * 1024)) {
 		    print "WARNING: $file is too big to fit on disc.  Skipping.\n";
 		} else {
@@ -103,28 +119,32 @@ sub addDir {
     }
 }
 
+sub updateDB {
+    foreach my $file (sort { $a cmp $b; } (keys %DB)) {
+	my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev,
+	    $size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
+	next if (!defined $size);
+	if ( $DB{$file}->{"mtime"} != $mtime || $DB{$file}->{"size"} != $size) {
+	    if ($DB{$file}->{"disc"} == 0) {
+		delete $DB{$file};
+		print ("Deleted file $file\n") if ($verbose > 1);
+	    } else {
+		print ("Updated file $file\n") if ($verbose > 1);
+		addFile($file, $size, $mtime, $dir, 0);
+	    }
+	}
+    }
+}
+
 sub loadDB {
     my $db = shift;
     open DBFILE, "< $db" || return;
     while (<DBFILE>) {
 	chomp;
-	if (/^MAXDISC\s*\=\s*([0-9]+)\s*$/) {
-	    $maxDisc = $1;
-	    print ("Got MAXDISC=$maxDisc)\n") if ($verbose);
-	    next;
-	}
-	if (/^DISC([0-9]+)\s*=\s*([0-9]+)\s*,\s*([0-9]+)\s*$/) {
-	    my $disc = $1;
-	    my $capacity = $2;
-	    my $used = $3;
-	    $DISCS{$disc} = { "capacity" => $capacity, "used" => $used };
-	    print("Got DISC[$disc]: Capacity: $capacity Used: $used\n") if ($verbose);
-	    next;
-	}
 	my ($size, $mtime, $disc, $file) = split (/\|/);
 	$dir = $file;
 	$dir =~ s/\/[^\/]+$//g;
-	print "Loading $file, $dir\n" if ($verbose);
+	print "Loading $file\n" if ($verbose > 2);
 	addFile($file, $size, $mtime, $dir, $disc);
     }
     close DBFILE;
@@ -133,10 +153,6 @@ sub loadDB {
 sub saveDB {
     my $db = shift;
     open DBFILE, "> $db" || die "Could not save database";
-    print DBFILE "MAXDISC=$maxDisc\n";
-    foreach my $disc (sort { $a <=> $b } keys %DISCS) {
-	printf DBFILE "DISC%d=%d,%d\n", $disc, $DISCS{$disc}->{"capacity"} , $DISCS{$disc}->{"used"};
-    }
     foreach my $file (sort { $a cmp $b; } (keys %DB)) {
 	printf DBFILE "%10d|%10d|%4d|%s\n",
 	    $DB{$file}->{"size"},
@@ -146,30 +162,42 @@ sub saveDB {
     }
 }
 
+sub resetDiscs {
+    print "Resetting Discs\n" if ($verbose);
+    foreach my $file ( (keys %DB)) {
+	$DB{$file}->{"disc"} = 0;
+    }
+    $maxDisc = 0;
+    $newMaxDisc = undef;
+    %DISCS = undef;
+}
+
 sub makeDiscs {
     my $added = 0;
-    foreach $file ( sort { $a cmp $b; } (keys %DB)) {
+    foreach my $file ( sort { $a cmp $b; } (keys %DB)) {
 	if ($DB{$file}->{"disc"} == 0) {
 	    my @files = collectDir($file);
 	    my $size = totalSize(@files);
 	    print $size
-	    $added += @files;
 	    my $disc = findDisc($size);
 	    foreach my $file2 (@files) {
-		print "Adding file $file2 to disc $disc\n" if ($verbose);
-		$addedd ++;
+		print "Adding file $file2 to disc $disc\n" if ($verbose > 1);
 		my $fileSize = kSize($file2);
 		if (($DISCS{$disc}->{"used"} + $kSize) > $DISCS{$disc}->{"capacity"}) {
 		    $disc = newDisc();
 		}
-		$DB{$file2}->{"disc"} = $disc;
-		$DISCS{$disc}->{"used"} += $fileSize;
+		## If it's not already on this disc, add it to this disc
+		if ($DB{$file2}->{"disc"} != $disc) {
+		    $added ++;
+		    $DISCS{$disc}->{"used"} += $fileSize;
+		    $DB{$file2}->{"disc"} = $disc;
+		}
 	    }
 	}
     }
     print "Added $added files.\n" if ($verbose);
     if ($added) {
-	print "Created " . ($newMaxDisc - $maxDisc) . " new discs\n" if ($verbose);
+	print "Created " . $discsCreated . " new discs\n" if ($verbose);
 	$maxDisc = $newMaxDisc;
     }
 }
@@ -196,6 +224,8 @@ sub totalSize {
 
 sub addFile {
     my ($file, $size, $mtime, $dir, $disc) = @_;
+    $file = File::Spec->canonpath($file);
+    $file = Cwd::realpath($file) if ($abspath);
     $DB{$file} = {
 	"file"  => $file,
 	"size"  => $size,
@@ -208,13 +238,11 @@ sub addFile {
     } else {
 	push @{$DIR{$dir}}, $file unless contains ($file, @{$DIR{$dir}});
     }
+    $maxDisc = $disc if ($disc > $maxDisc);
 }
 
 sub findDisc {
     my $size = shift;
-    if (!defined $newMaxDisc) {
-	newDisc();
-    }
     my $disc;
     if ($pack) {
 	foreach $disc (($maxDisc + 1) .. $newMaxDisc) {
@@ -222,6 +250,9 @@ sub findDisc {
 		return $disc;
 	    }
 	}
+    }
+    if (!defined $newMaxDisc) {
+	newDisc();
     }
     $disc = $newMaxDisc;
     if (($DISCS{$disc}->{"used"} + $size) > $DISCS{$disc}->{"capacity"}) {
@@ -235,6 +266,7 @@ sub newDisc {
 	$newMaxDisc = $maxDisc;
     }
     $newMaxDisc++;
+    $discsCreated++;
     $DISCS{$newMaxDisc} = {"capacity" => $discSize, "used" => 0 };
     return $newMaxDisc;
 }
@@ -261,8 +293,10 @@ __DATA__
 	-d	--database	database to use.  Default is Backup.
 	-k	--keepdirs	Keep directories packaged together
 	-p	--pack		Attempt to pack disks.
-	-c	--cd		Package for CD's.
+	-f	--fill		Continue to fill last disc.
+		--cd		Package for CD's.
 		--dvd		Package for DVD's
 		--dvd2		Package for Dual Layer DVD's
 	-s	--size		Package for size K disks
+	-r	--resetDB	
 	-h	--help		This screen.
