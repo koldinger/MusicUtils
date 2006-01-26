@@ -92,9 +92,7 @@ sub addDir {
     my @names = readdir(DIRHANDLE);
     closedir(DIRHANDLE);
 
-    foreach my $name (@names) {
-	next if $name eq ".";
-	next if $name eq "..";
+    foreach my $name (File::Spec->no_upwards(@names)) {
 	my $file = File::Spec->canonpath(File::Spec->catfile($dir, $name));
 	if (-d $file) {
 	    push @dirs, $file;
