@@ -1,0 +1,8 @@
+#! /usr/bin/perl
+
+use Unicode::String;
+
+while (<>) {
+    chomp;
+    print Unicode::String::latin1($_)->utf8(), "\n";
+}
