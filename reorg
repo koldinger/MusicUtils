@@ -1,0 +1,124 @@
+#! /usr/bin/perl
+
+use MP3::Tag;
+use Audio::FLAC::Header;
+use Getopt::Long;
+use Unicode::String;
+use File::Spec;
+use File::Path;
+use Cwd;
+
+# Set up options processing
+$trackNumber	= undef;
+$basedir	= "/music/MP3";
+$variousArtists	= "VariousArtists";
+$utf8		= 1;
+
+$result = GetOptions(
+		     "utf8!" =>	\$utf8,
+		     "help" => \$help
+		     );
+
+if (!$result)
+{
+    print "Invalid options\n";
+}
+
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+## Now, parse the various files
+foreach $file (@ARGV)
+{
+    $result = renameMP3($file) if ($file =~ /\.mp3$/);
+    $result = renameFLAC($file) if ($file =~ /\.flac$/);
+    if ($result ne 0)
+    {
+	chomp $result;
+	print $result, "\n";
+	$numFailures++;
+    }
+}
+
+$numFailures;
+
+sub renameFLAC {
+    my $file = shift;
+    my $flac = Audio::FLAC::Header->new($file) || return "Could not read tags from $file";
+    my $tags = $flac->tags() || return "No tags found in $file";
+    my $artist = latin1(munge($tags->{"ARTIST"})) || return "No artist tag in $file";
+    my $album  = latin1(munge($tags->{"ALBUM"}))  || return "No album tag in $file";
+    my $title  = latin1(munge($tags->{"TITLE"}))  || return "No title tag in $file";
+    my $track  = $tags->{"TRACK"} || return "No track tag in $file";;
+    doRename($file, $artist, $album, $title, $track, ".flac");
+}
+
+sub renameMP3 {
+    my $file = shift;
+    my $mp3 = MP3::Tag->new($file)      || return "Could not read $file";
+    $mp3->get_tags()                    || return "Could not get tags in $file";
+    my $artist = utf8(munge($mp3->artist())) || return "No artist tag in $file";
+    my $album  = utf8(munge($mp3->album()))  || return "No album tag in $file";
+    my $title  = utf8(munge($mp3->title()))  || return "No title tag in $file";	
+    my $track  = $mp3->track()		     || return "No track tag in $file";
+    doRename($file, $artist, $album, $title, $track, ".mp3");
+}
+
+sub doRename {
+    my ($file, $artist, $album, $title, $track, $suffix) = @_;
+
+    $artist = $variousArtists if ($file =~ /$variousArtists\//);
+
+    $track = int($track);
+    $track = "0$track" if ($track < 10);
+
+    my $newfile = "$track.$title$suffix";
+    my $newdir = File::Spec->catdir($basedir,$artist,$album);
+    my $newpath = File::Spec->catfile($newdir, $newfile);
+    if (Cwd::realpath($file) eq Cwd::realpath($newpath)) {
+	print "Not moving $file.  Name not changed\n";
+	return 0;
+    }
+    print "Moving $file to $newpath\n";
+    mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+    if (-e $newpath) {
+	return "$file Target $newpath exists.  Not moved."
+    } else {
+	rename $file, $newpath || die "Could not move $file to $newpath\n";
+    }
+    0;
+}
+
+sub munge {
+    #echo "$@" | sed s,:,\ -,g | tr \ / __ | tr -d \'\"\?\[:cntrl:\]
+    my $name = shift;
+    $name =~ s/[\"\'\?]//g;
+    $name =~ s/[ \/]/_/g;
+    $name =~ s/:/_-/g;
+    return $name;
+}
+sub utf8 {
+    my $name = shift;
+    return undef if (!defined $name);
+    $name = Unicode::String::latin1($name)->utf8() if ($utf8);
+    return $name;
+}
+sub latin1 {
+    my $name = shift;
+    return undef if (!defined $name);
+    $name = Unicode::String::utf8($name)->latin1() if (!$utf8);
+    return $name;
+}
+
+
+sub usage {
+    print <DATA>;
+}
+__DATA__
+	-d CDDB	--db=s		Where to find the CDDB database.
+	-c file	--cddb=file	Explicit file to read data from.
+	-i ID	--id=id		CDDB ID to use istead of from current tag.
+	-t trk	--track=trk	Track number to use instead of from current tag.
+	-h	--help		This screen.

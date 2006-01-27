@@ -5,6 +5,7 @@ use Sys::Hostname;
 use Sys::Syslog;
 use Mail::Sendmail;
 use CDDB::File;
+use POSIX;
 
 # Set up options processing
 
@@ -17,6 +18,7 @@ $maxLoops = 0;
 $quietABCDE = 0;
 $notify = 0;
 $daemon = 0;
+$nice = 0;
 $script = "/usr/local/bin/abcde";
 
 $result = GetOptions(
@@ -26,6 +28,7 @@ $result = GetOptions(
 		     "loops=i" => \$maxLoops,
 		     "address=s" => \$mail,
 		     "notify!" => \$notify,
+		     "nice=i" => \$nice,
 		     "quietabcde!" => \$quietABCDE,
 		     "daemon!" => \$daemon,
 		     "script" => \$script,
@@ -47,6 +50,8 @@ if ($daemon) {
 
 $quietABCDE = 1 if ($daemon);
 # $verbose = 0 if ($daemon);
+POSIX::nice($nice) if ($nice);
+
 
 chdir $dir || die "Could not change to target directory: $dir\n";
 

@@ -2,6 +2,7 @@
 
 use CDDB::File;
 use MP3::Tag;
+use Audio::FLAC::Header;
 use Getopt::Long;
 use Unicode::String;
 use File::Spec;
@@ -11,6 +12,7 @@ $cddbDir	= $ENV{"HOME"} . "/.cddb";
 $cddbFile	= undef;
 $cddbID		= undef;
 $trackNumber	= undef;
+$utf8		= 0;
 $help		= 0;
 
 $globalCDDB	= undef;
@@ -20,6 +22,7 @@ $result = GetOptions(
 		     "cddb=s" => \$cddbFile,
 		     "id=s" => \$cddbID,
 		     "track=i" => \$trackNumber,
+		     "utf8!" =>	\$utf8,
 		     "help" => \$help
 		     );
 
@@ -45,7 +48,9 @@ $numFailures = 0;
 ## Now, parse the various files
 foreach $file (@ARGV)
 {
-    my $result = setTags($file, $trackNumber, $cddbID, $cddb);
+    my $result = 0;
+    $result = setTagsMP3($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.mp3$/);;
+    $result = setTagsFLAC($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.flac$/);
     if ($result ne 0)
     {
 	chomp $result;
@@ -56,7 +61,46 @@ foreach $file (@ARGV)
 
 $numFailures;
 
-sub setTags {
+sub setTagsFLAC {
+    my ($file, $track, $discid, $cddb) = @_;
+    print "Setting tags in $file\n";
+
+    my $flac = Audio::FLAC::Header->new($file);
+    my $tags = $flac->tags();
+
+    my $cddb 	= $globalCDDB;
+    my $discid 	= $cddbID;
+    my $track 	= $trackNumber;
+
+    ## If no CDDB file is specified, let's get one.
+    if (!defined $cddb) {
+    	if (!defined $discid) {
+	    return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $tags->{"CDDB"});
+	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+	    ($discid) = split/,/, $txxx->{"Text"};
+	}
+	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
+    }
+
+
+    if (!defined $track)
+    {
+	$track = $tags->{"TRACK"} || return "Could not get track in $file.  Must set on command line\n";
+    }
+
+    $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
+
+    $tags->{"ARTIST"} = Unicode::String::latin1($trackInfo->artist())->utf8();
+    $tags->{"ALBUM"}  = Unicode::String::latin1($cddb->title())->utf8();
+    $tags->{"TITLE"}  = Unicode::String::latin1($trackInfo->title())->utf8();
+    $tags->{"GENRE"}  = Unicode::String::latin1($cddb->genre())->utf8();
+    $tags->{"YEAR"}   = $cddb->year();
+    $tags->{"TRACK"}  = $trackInfo->number() . "/" . $cddb->track_count();
+    $tags->{"CDDB"}   = $cddb->id();
+    $flac->write() 
+}
+
+sub setTagsMP3 {
     my ($file, $track, $discid, $cddb) = @_;
     print "Setting tags in $file\n";
 
@@ -92,13 +136,13 @@ sub setTags {
 
     # remove ID3v1.  We don't need it.
     $id3v1->remove_tag() if (defined $id3v1);
-    # $id3v2->remove_tag() if (defined $id3v2);
 
-    $id3v2 = $mp3->new_tag("ID3v2");
-    $id3v2->add_frame("TPE1", $trackInfo->artist());
-    $id3v2->add_frame("TALB", $cddb->title());
-    $id3v2->add_frame("TIT2", $trackInfo->title());
-    $id3v2->add_frame("TCON", $cddb->genre());
+    $id3v2 = $mp3->new_tag("ID3v2"); # if (!defined $id3v2);
+
+    $id3v2->add_frame("TPE1", 0, translate($trackInfo->artist()));
+    $id3v2->add_frame("TALB", 0, translate($cddb->title()));
+    $id3v2->add_frame("TIT2", 0, translate($trackInfo->title()));
+    $id3v2->add_frame("TCON", 0, translate($cddb->genre()));
     $id3v2->add_frame("TYER", $cddb->year());
     $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
     $id3v2->add_frame("TXXX", "CDDB", $cddb->id());
@@ -118,8 +162,8 @@ sub setTags {
 
 sub translate {
     my $string = shift;
-    if ($latin1) {
-	$string = Unicode::String::latin1($string)->utf8();
+    if ($utf8) {
+	$string = Unicode::String::utf8($string)->latin1();
     } 
     $string;
 }
