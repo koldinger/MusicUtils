@@ -97,7 +97,9 @@ sub setTagsFLAC {
     $tags->{"YEAR"}   = $cddb->year();
     $tags->{"TRACK"}  = $trackInfo->number() . "/" . $cddb->track_count();
     $tags->{"CDDB"}   = $cddb->id();
-    $flac->write() 
+    my $result = $flac->write();
+    return "Unable to write flac tag in $file.  Result: $result" if ($result);
+    0;
 }
 
 sub setTagsMP3 {
