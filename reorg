@@ -9,13 +9,14 @@ use File::Path;
 use Cwd;
 
 # Set up options processing
-$trackNumber	= undef;
 $basedir	= "/music/MP3";
 $variousArtists	= "VariousArtists";
 $utf8		= 1;
 
 $result = GetOptions(
 		     "utf8!" =>	\$utf8,
+		     "base=s" => \$basedir,
+		     "various=s" => \$variousArtists,
 		     "help" => \$help
 		     );
 
@@ -32,8 +33,44 @@ if ($help || !$result) {
 ## Now, parse the various files
 foreach $file (@ARGV)
 {
-    $result = renameMP3($file) if ($file =~ /\.mp3$/);
-    $result = renameFLAC($file) if ($file =~ /\.flac$/);
+    if (-d $file) { 
+	reorgDir($file);
+    } else {
+	renameFile($file);
+    }
+}
+
+
+
+
+$numFailures;
+
+sub reorgDir {
+    my $file = shift;
+    opendir DIRHANDLE, "$file" || die "Could not open directory $file\n";
+    my @names = readdir(DIRHANDLE);
+    closedir DIRHANDLE;
+
+    foreach my $name (File::Spec->no_upwards(@names)) {
+	if (-d $name) {
+	    reorgDir($name);
+	} else {
+	    renameFile($name);
+	}
+    }
+}
+
+sub renameFile {
+    my $file = shift;
+    my $result;
+    if ($file =~ /\.mp3$/) {
+	$result = renameMP3($file);
+    } elsif ($file =~ /\.flac$/) {
+	$result = renameFLAC($file)
+    } else {
+	print "$file: Not tagged type\n";
+	return;
+    }
     if ($result ne 0)
     {
 	chomp $result;
@@ -41,8 +78,6 @@ foreach $file (@ARGV)
 	$numFailures++;
     }
 }
-
-$numFailures;
 
 sub renameFLAC {
     my $file = shift;
