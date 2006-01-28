@@ -77,7 +77,7 @@ sub setTagsFLAC {
     	if (!defined $discid) {
 	    return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $tags->{"CDDB"});
 	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
-	    ($discid) = split/,/, $txxx->{"Text"};
+	    ($discid) = split/,/, $tags->{"CDDB"};
 	}
 	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
     }
@@ -85,7 +85,8 @@ sub setTagsFLAC {
 
     if (!defined $track)
     {
-	$track = $tags->{"TRACK"} || return "Could not get track in $file.  Must set on command line\n";
+	$track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
+	$track =~ s/\/.*$//;
     }
 
     $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
@@ -95,7 +96,7 @@ sub setTagsFLAC {
     $tags->{"TITLE"}  = Unicode::String::latin1($trackInfo->title())->utf8();
     $tags->{"GENRE"}  = Unicode::String::latin1($cddb->genre())->utf8();
     $tags->{"YEAR"}   = $cddb->year();
-    $tags->{"TRACK"}  = $trackInfo->number() . "/" . $cddb->track_count();
+    $tags->{"TRACKNUMBER"}  = $trackInfo->number() . "/" . $cddb->track_count();
     $tags->{"CDDB"}   = $cddb->id();
     my $result = $flac->write();
     return "Unable to write flac tag in $file.  Result: $result" if ($result);

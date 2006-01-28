@@ -52,10 +52,11 @@ sub reorgDir {
     closedir DIRHANDLE;
 
     foreach my $name (File::Spec->no_upwards(@names)) {
-	if (-d $name) {
-	    reorgDir($name);
+	my $path = File::Spec->catfile($file, $name);
+	if (-d $path) {
+	    reorgDir($path);
 	} else {
-	    renameFile($name);
+	    renameFile($path);
 	}
     }
 }
@@ -86,7 +87,7 @@ sub renameFLAC {
     my $artist = latin1(munge($tags->{"ARTIST"})) || return "No artist tag in $file";
     my $album  = latin1(munge($tags->{"ALBUM"}))  || return "No album tag in $file";
     my $title  = latin1(munge($tags->{"TITLE"}))  || return "No title tag in $file";
-    my $track  = $tags->{"TRACK"} || return "No track tag in $file";;
+    my $track  = $tags->{"TRACKNUMBER"} || return "No track tag in $file";;
     doRename($file, $artist, $album, $title, $track, ".flac");
 }
 
