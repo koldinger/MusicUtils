@@ -12,11 +12,15 @@ use Cwd;
 $basedir	= "/music/MP3";
 $variousArtists	= "VariousArtists";
 $utf8		= 1;
+$compilation	= 0;
+@dragfiles	= ();
 
 $result = GetOptions(
 		     "utf8!" =>	\$utf8,
 		     "base=s" => \$basedir,
+		     "compilation" => \$compilation,
 		     "various=s" => \$variousArtists,
+		     "drag=s"	=> \@dragfiles,
 		     "help" => \$help
 		     );
 
@@ -29,6 +33,10 @@ if ($help || !$result) {
     usage();
     exit;
 }
+
+if (@dragfiles == 0) { @dragfiles = ("cover.jpg"); }
+
+@dragfiles = split(/,/,join(',',@dragfiles));
 
 ## Now, parse the various files
 foreach $file (@ARGV)
@@ -53,6 +61,7 @@ sub reorgDir {
 
     foreach my $name (File::Spec->no_upwards(@names)) {
 	my $path = File::Spec->catfile($file, $name);
+	next unless (-e $path);
 	if (-d $path) {
 	    reorgDir($path);
 	} else {
@@ -105,7 +114,7 @@ sub renameMP3 {
 sub doRename {
     my ($file, $artist, $album, $title, $track, $suffix) = @_;
 
-    $artist = $variousArtists if ($file =~ /$variousArtists\//);
+    $artist = $variousArtists if ($file =~ /$variousArtists\// || $compilation) ;
 
     $track = int($track);
     $track = "0$track" if ($track < 10);
@@ -124,7 +133,42 @@ sub doRename {
     } else {
 	rename $file, $newpath || die "Could not move $file to $newpath\n";
     }
+    drag($file, $newdir);
     0;
+}
+
+$lastOldDir = undef;
+$lastNewDir = undef;
+
+sub drag {
+    my ($file, $newdir) = @_;
+    my ($sink, $olddir, $sink) = File::Spec->splitpath($file);
+    if (($olddir ne $lastOldDir) || ($newdir ne $lastNewDir)) {
+	doDrag($olddir, $newdir);
+	$lastOldDir = $olddir;
+	$lastNewDir = $newdir;
+    }
+}
+
+sub doDrag {
+    my ($olddir, $newdir) = @_;
+    foreach my $file (@dragfiles) {
+	my $oldpath = File::Spec->catfile($olddir, $file);
+	if (-e $oldpath) {
+	    my $newpath = File::Spec->catfile($newdir, $file);
+	    if (Cwd::realpath($oldpath) eq Cwd::realpath($newpath)) {
+		print "Not moving $oldpath.  Name not changed\n";
+		next;
+	    }
+	    print "Dragging $oldpath to $newpath\n";
+	    mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+	    if (-e $newpath) {
+		return "$file Target $newpath exists.  Not moved."
+	    } else {
+		rename $oldpath, $newpath || die "Could not move $oldpath to $newpath\n";
+	    }
+	}
+    }
 }
 
 sub munge {
@@ -153,8 +197,8 @@ sub usage {
     print <DATA>;
 }
 __DATA__
-	-d CDDB	--db=s		Where to find the CDDB database.
-	-c file	--cddb=file	Explicit file to read data from.
-	-i ID	--id=id		CDDB ID to use istead of from current tag.
-	-t trk	--track=trk	Track number to use instead of from current tag.
+	-u	--utf8		Create target filenames in UTF8
+	-b path	--base=path	Create Targets in path.  Must be in the same filesystem as originals.
+	-v name	--various=name	Name of Various Artists directory.
+	-d 	--drag=s	Drag files with this name along with music files.  Multiple can be specified.
 	-h	--help		This screen.
