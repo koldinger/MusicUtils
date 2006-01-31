@@ -13,6 +13,8 @@ $basedir	= "/music/MP3";
 $variousArtists	= "VariousArtists";
 $utf8		= 1;
 $compilation	= 0;
+$dorename	= 1;
+$cleanUp	= 0;
 @dragfiles	= ();
 
 $result = GetOptions(
@@ -21,6 +23,8 @@ $result = GetOptions(
 		     "compilation" => \$compilation,
 		     "various=s" => \$variousArtists,
 		     "drag=s"	=> \@dragfiles,
+		     "rename!" => \$dorename,
+		     "clean" => \$cleanUp,
 		     "help" => \$help
 		     );
 
@@ -91,30 +95,38 @@ sub renameFile {
 
 sub renameFLAC {
     my $file = shift;
+    my $vaTag = 0;
     my $flac = Audio::FLAC::Header->new($file) || return "Could not read tags from $file";
     my $tags = $flac->tags() || return "No tags found in $file";
     my $artist = latin1(munge($tags->{"ARTIST"})) || return "No artist tag in $file";
     my $album  = latin1(munge($tags->{"ALBUM"}))  || return "No album tag in $file";
     my $title  = latin1(munge($tags->{"TITLE"}))  || return "No title tag in $file";
     my $track  = $tags->{"TRACKNUMBER"} || return "No track tag in $file";;
-    doRename($file, $artist, $album, $title, $track, ".flac");
+    my $vaTag = 1 if (defined $tags->{"COMPILATION"});
+    doRename($file, $artist, $album, $title, $track, $vaTag, ".flac");
 }
 
 sub renameMP3 {
     my $file = shift;
+    my $vaTag = 0;
     my $mp3 = MP3::Tag->new($file)      || return "Could not read $file";
     $mp3->get_tags()                    || return "Could not get tags in $file";
     my $artist = utf8(munge($mp3->artist())) || return "No artist tag in $file";
     my $album  = utf8(munge($mp3->album()))  || return "No album tag in $file";
     my $title  = utf8(munge($mp3->title()))  || return "No title tag in $file";	
     my $track  = $mp3->track()		     || return "No track tag in $file";
-    doRename($file, $artist, $album, $title, $track, ".mp3");
+
+    my $id3v2 = $mp3->{ID3v2};
+    my ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
+    my $vaTag = 1 if (defined $info);
+
+    doRename($file, $artist, $album, $title, $track, $vaTag, ".mp3");
 }
 
 sub doRename {
-    my ($file, $artist, $album, $title, $track, $suffix) = @_;
+    my ($file, $artist, $album, $title, $track, $varArtists, $suffix) = @_;
 
-    $artist = $variousArtists if ($file =~ /$variousArtists\// || $compilation) ;
+    $artist = $variousArtists if ($varArtists || $compilation || $file =~ /$variousArtists\//);
 
     $track = int($track);
     $track = "0$track" if ($track < 10);
@@ -127,14 +139,29 @@ sub doRename {
 	return 0;
     }
     print "Moving $file to $newpath\n";
-    mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+    if ($dorename) {
+	mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+    }
     if (-e $newpath) {
 	return "$file Target $newpath exists.  Not moved."
     } else {
-	rename $file, $newpath || die "Could not move $file to $newpath\n";
+	rename $file, $newpath if ($dorename) || return "Could not move $file to $newpath\n";
     }
     drag($file, $newdir);
+    purgeDir($file) if ($cleanUp);
     0;
+}
+
+sub purgeDir {
+    my $file = shift;
+    my ($sink, $dir, $sink) = File::Spec->splitpath($file);
+    opendir (DIR, $dir) || return;
+    my $numFiles = File::Spec->no_upwards(readdir(DIR));
+    closedir DIR;
+    if ($numFiles == 0) {
+	print "Removing empty directory $dir\n";
+	rmtree($dir);
+    }
 }
 
 $lastOldDir = undef;
@@ -161,11 +188,13 @@ sub doDrag {
 		next;
 	    }
 	    print "Dragging $oldpath to $newpath\n";
-	    mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+	    if ($dorename) {
+		mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
+	    }
 	    if (-e $newpath) {
 		return "$file Target $newpath exists.  Not moved."
 	    } else {
-		rename $oldpath, $newpath || die "Could not move $oldpath to $newpath\n";
+		rename $oldpath, $newpath if ($dorename) || die "Could not move $oldpath to $newpath\n";
 	    }
 	}
     }
@@ -201,4 +230,5 @@ __DATA__
 	-b path	--base=path	Create Targets in path.  Must be in the same filesystem as originals.
 	-v name	--various=name	Name of Various Artists directory.
 	-d 	--drag=s	Drag files with this name along with music files.  Multiple can be specified.
+	-r	--rename	Actually do the rename (--norename for dry run)
 	-h	--help		This screen.
