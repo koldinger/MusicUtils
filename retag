@@ -90,14 +90,18 @@ sub setTagsFLAC {
     }
 
     $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
+    my ($title, $pos) = parseTitle($cddb->title());
 
-    $tags->{"ARTIST"} = Unicode::String::latin1($trackInfo->artist())->utf8();
-    $tags->{"ALBUM"}  = Unicode::String::latin1($cddb->title())->utf8();
-    $tags->{"TITLE"}  = Unicode::String::latin1($trackInfo->title())->utf8();
-    $tags->{"GENRE"}  = Unicode::String::latin1($cddb->genre())->utf8();
-    $tags->{"YEAR"}   = $cddb->year();
-    $tags->{"TRACKNUMBER"}  = $trackInfo->number() . "/" . $cddb->track_count();
-    $tags->{"CDDB"}   = $cddb->id();
+    $tags->{"ARTIST"} 		= Unicode::String::latin1($trackInfo->artist())->utf8();
+    $tags->{"ALBUM"}  		= Unicode::String::latin1($title)->utf8();
+    $tags->{"TITLE"}  		= Unicode::String::latin1($trackInfo->title())->utf8();
+    $tags->{"GENRE"}  		= Unicode::String::latin1($cddb->genre())->utf8();
+    $tags->{"YEAR"}   		= $cddb->year();
+    $tags->{"TRACKNUMBER"}  	= $trackInfo->number() . "/" . $cddb->track_count();
+    $tags->{"CDDB"}   		= $cddb->id();
+
+    $tags->{"COMPILATION"}	= 1 if ($cddb->artist ne $trackInfo->artist() || $cddb->artist eq "Various");
+    $tags->{"SET"}		= $pos if (defined $pos);
     my $result = $flac->write();
     return "Unable to write flac tag in $file.  Result: $result" if ($result);
     0;
@@ -142,13 +146,18 @@ sub setTagsMP3 {
 
     $id3v2 = $mp3->new_tag("ID3v2"); # if (!defined $id3v2);
 
+    my ($title, $pos) = parseTitle($cddb->title());
+
+    $id3v2->add_frame("TALB", 0, translate($title));
     $id3v2->add_frame("TPE1", 0, translate($trackInfo->artist()));
-    $id3v2->add_frame("TALB", 0, translate($cddb->title()));
     $id3v2->add_frame("TIT2", 0, translate($trackInfo->title()));
     $id3v2->add_frame("TCON", 0, translate($cddb->genre()));
     $id3v2->add_frame("TYER", $cddb->year());
     $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
     $id3v2->add_frame("TXXX", "CDDB", $cddb->id());
+
+    $id3v2->add_frame("TCMP", 1) if ($cddb->artist ne $trackInfo->artist() || $cddb->artist eq "Various");
+    $id3v2->add_frame("TPOS", $pos) if (defined $pos);
     # TIT2 (Title/songname/content description): 51 Phantom
     # TPE1 (Lead performer(s)/Soloist(s)): North Mississippi Allstars
     # TALB (Album/Movie/Show title): 51 Phantom
@@ -161,6 +170,16 @@ sub setTagsMP3 {
 
     $mp3->close();
     0;
+}
+
+sub parseTitle {
+    my $title = shift;
+    my $pos = undef;
+    if ($title =~ /\s*(.*)\s*[\(\[]\s*Dis[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
+	$title = $1;
+	$pos = "$2/$3";
+    }
+    return ($title, $pos);
 }
 
 sub translate {
