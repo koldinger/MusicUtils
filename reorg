@@ -96,19 +96,22 @@ sub renameFile {
 sub renameFLAC {
     my $file = shift;
     my $vaTag = 0;
+    my $disc = undef;
     my $flac = Audio::FLAC::Header->new($file) || return "Could not read tags from $file";
     my $tags = $flac->tags() || return "No tags found in $file";
     my $artist = latin1(munge($tags->{"ARTIST"})) || return "No artist tag in $file";
     my $album  = latin1(munge($tags->{"ALBUM"}))  || return "No album tag in $file";
     my $title  = latin1(munge($tags->{"TITLE"}))  || return "No title tag in $file";
     my $track  = $tags->{"TRACKNUMBER"} || return "No track tag in $file";;
-    my $vaTag = 1 if (defined $tags->{"COMPILATION"});
-    doRename($file, $artist, $album, $title, $track, $vaTag, ".flac");
+    $vaTag = 1 if (defined $tags->{"COMPILATION"});
+    $disc  = $tags->{"SET"} if (defined $tags->{"SET"});
+    doRename($file, $artist, $album, $title, $disc, $track, $vaTag, ".flac");
 }
 
 sub renameMP3 {
     my $file = shift;
     my $vaTag = 0;
+    my $disc = undef;
     my $mp3 = MP3::Tag->new($file)      || return "Could not read $file";
     $mp3->get_tags()                    || return "Could not get tags in $file";
     my $artist = utf8(munge($mp3->artist())) || return "No artist tag in $file";
@@ -118,18 +121,21 @@ sub renameMP3 {
 
     my $id3v2 = $mp3->{ID3v2};
     my ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
-    my $vaTag = 1 if (defined $info);
+    $vaTag = 1 if (defined $info);
+    my ($info, $name, @rest) = $id3v2->get_frame("TPOS") if (defined $id3v2);
+    $disc  = int $info if (defined $info);
 
-    doRename($file, $artist, $album, $title, $track, $vaTag, ".mp3");
+    doRename($file, $artist, $album, $title, $track, $disc, $vaTag, ".mp3");
 }
 
 sub doRename {
-    my ($file, $artist, $album, $title, $track, $varArtists, $suffix) = @_;
+    my ($file, $artist, $album, $title, $track, $disc, $varArtists, $suffix) = @_;
 
-    $artist = $variousArtists if ($varArtists || $compilation || $file =~ /$variousArtists\//);
+    $artist = $variousArtists if ($varArtists || $compilation);
 
     $track = int($track);
     $track = "0$track" if ($track < 10);
+    $track = "$disc-$track" if (defined $disc);
 
     my $newfile = "$track.$title$suffix";
     my $newdir = File::Spec->catdir($basedir,$artist,$album);

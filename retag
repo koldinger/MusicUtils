@@ -175,11 +175,19 @@ sub setTagsMP3 {
 sub parseTitle {
     my $title = shift;
     my $pos = undef;
-    if ($title =~ /\s*(.*)\s*[\(\[]\s*Dis[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
+    if ($title =~ /\s*(.*\w)\s*[\(\[]\s*Dis[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
 	$title = $1;
 	$pos = "$2/$3";
     }
+
     return ($title, $pos);
+}
+
+sub trim {
+    my $line = shift;
+    $line = s/^\s+//;
+    $line = s/\s+//;
+    return $line;
 }
 
 sub translate {
