@@ -1,4 +1,8 @@
 #! /usr/bin/perl
+# Copyright Eric Koldinger, 2006
+# kolding @ koldware.com
+# No warranty, expressed, or implied, if you use this program.  Author is not responsible for any
+# damage it may do to your files or sanity.
 
 use MP3::Tag;
 use Audio::FLAC::Header;
@@ -105,7 +109,7 @@ sub renameFLAC {
     my $track  = $tags->{"TRACKNUMBER"} || return "No track tag in $file";;
     $vaTag = 1 if (defined $tags->{"COMPILATION"});
     $disc  = $tags->{"SET"} if (defined $tags->{"SET"});
-    doRename($file, $artist, $album, $title, $disc, $track, $vaTag, ".flac");
+    doRename($file, $artist, $album, $title, $track, $disc, $vaTag, ".flac");
 }
 
 sub renameMP3 {

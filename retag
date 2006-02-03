@@ -1,4 +1,8 @@
 #! /usr/bin/perl
+# Copyright Eric Koldinger, 2006
+# kolding @ koldware.com
+# No warranty, expressed, or implied, if you use this program.  Author is not responsible for any
+# damage it may do to your files or sanity.
 
 use CDDB::File;
 use MP3::Tag;
@@ -172,12 +176,19 @@ sub setTagsMP3 {
     0;
 }
 
+#
+# Parse the title string.  Look for Disc X of Y, or Disc X.
+# If it exists, pull it out, and return it as a position tag in a set.
+#
 sub parseTitle {
     my $title = shift;
     my $pos = undef;
-    if ($title =~ /\s*(.*\w)\s*[\(\[]\s*Dis[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
+    if ($title =~ /\s*(.*\w)\s*[\(\[]\s*[Dd]is[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
 	$title = $1;
 	$pos = "$2/$3";
+    } elsif ($title =~ /\s*(.*\w)\s*[\(\[]\s*[Dd]is[ck]\s*([0-9]+)\s*[\)\]]/) {
+	$title = $1;
+	$pos = "$2";
     }
 
     return ($title, $pos);

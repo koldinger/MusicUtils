@@ -1,4 +1,8 @@
 #! /usr/bin/perl
+# Copyright Eric Koldinger, 2006
+# kolding @ koldware.com
+# No warranty, expressed, or implied, if you use this program.  Author is not responsible for any
+# damage it may do to your files or sanity.
 
 use Getopt::Long;
 use Sys::Hostname;
@@ -49,7 +53,7 @@ if ($daemon) {
 }
 
 $quietABCDE = 1 if ($daemon);
-# $verbose = 0 if ($daemon);
+$verbose = 0 if ($daemon);
 POSIX::nice($nice) if ($nice);
 
 
@@ -96,6 +100,7 @@ while (1)
     {
 	print "Sleeping for $sleep minutes\n" if $verbose;
 	sleep ($sleep * 60);
+	message("Looking for files to process in $dir");
     }
 }
 

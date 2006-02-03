@@ -136,7 +136,7 @@ sub runMkISO {
     my $output = shift;
 
     print "Making ISO Image of $disc in $output from $dir\n";
-    system ("mkisofs -r -R -l -f -q -input-charset=iso8859-1 -o $output $dir");
+    system ("mkisofs -r -R -l -f -q -input-charset=utf8 -o $output $dir");
 }
 
 sub cleanup {
