@@ -230,10 +230,9 @@ sub loadCDDB {
     my @files = readdir(DIRHANDLE);
     closedir (DIRHANDLE);
 
-    foreach my $file (@files) {
-	next if ($file =~ /\./);
-	next if ($file =~ /\.\./);
+    foreach my $file (File::Spec->no_upwards(@files)) {
 	my $filename = File::Spec->catfile($cddbDir, $file);
+	next if (-d $filename);
 	my $cddb = CDDB::File->new($filename) || die "Could not open and parse CDDB file $filename\n";
 	foreach my $id ($cddb->all_ids()) {
 	    $CDDB{$id} = $cddb;
