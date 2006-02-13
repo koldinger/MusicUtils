@@ -1,0 +1,76 @@
+#! /usr/bin/perl
+
+use ClassicalDB;
+use JSON;
+use Unicode::String;
+
+$json = new JSON(pretty => 1, indent => 4, skipinvalid => 1);
+
+$file = shift;
+my $obj = ClassicalDB->parse($file) || die "Could not parse $file";
+
+%uncheckedTracks = map { $_ => 1 } (1 .. $obj->numTracks());
+#print sort { $a <=> $b} keys %uncheckedTracks, "\n";
+@works = ();
+
+foreach $arg (@ARGV) {
+    # print "---- $arg ----\n";
+    if ($arg =~ /([\d]+)-([\d]+)/) {
+	@trackNums = ($1..$2);
+    } else {
+	@trackNums = split /,/, $arg;
+    }
+    my %work = ();
+    my @tracks = ();
+    foreach $i (@trackNums) {
+	die "Track $i is not defined\n" if ($i > $obj->numTracks());
+	die "Track $i in multiple works\n" unless (defined $uncheckedTracks{$i});
+	delete $uncheckedTracks{$i};
+	$track = $obj->getTrack($i)  || die "Could not find track $i\n";
+	push @tracks, $track;
+    }
+    findCommon(\%work, @tracks);
+    @tracks = sort {$a->{TRACKNUMBER} <=> $b->{TRACKNUMBER}} @tracks;
+    $work{tracks} = \@tracks if (@tracks > 1);
+    push @works, \%work;
+}
+
+if (keys %uncheckedTracks != 0) {
+    print "Missed the following tracks: ";
+    map {print $_, " "}  sort { $a <=> $b} (keys %uncheckedTracks);
+    print "\n";
+    die "Must process all tracks\n";
+}
+
+%obj = ();
+findCommon(\%obj, @works);
+$obj{"works"} = \@works;
+
+rename $file, "$file.bak" || die "Could not move $file";
+open OUTPUT, "> $file" || die "Could not open $file for writing";
+print OUTPUT $json->objToJson(\%obj), "\n";
+close OUTPUT;
+
+sub findCommon {
+    my $obj = shift;
+    my @tracks = @_;
+    my $numTracks = @tracks;
+    my $protoTrack = $tracks[0];
+    foreach my $key (keys %$protoTrack) {
+        my $value = $protoTrack->{$key};
+	next unless defined $value;
+	next if ref $value;
+        # print "Checking $key for commonality: ", $value, "\n";
+        my $common = 1;
+        foreach $track (@tracks) {
+            $common = 0 unless ($track->{$key} eq $value);
+        }
+        if ($common) {
+            # print "$key is common\n";
+            $obj->{$key} = $value;
+            foreach $track (@tracks) {
+                delete $track->{$key};
+            }
+        }
+    }
+}
