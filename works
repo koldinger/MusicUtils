@@ -1,5 +1,7 @@
 #! /usr/bin/perl
 
+use lib $ENV{HOME} . "/dev/MusicUtils";
+
 use ClassicalDB;
 use JSON;
 use Unicode::String;
@@ -14,25 +16,8 @@ my $obj = ClassicalDB->parse($file) || die "Could not parse $file";
 @works = ();
 
 foreach $arg (@ARGV) {
+    processWork($arg);
     # print "---- $arg ----\n";
-    if ($arg =~ /([\d]+)-([\d]+)/) {
-	@trackNums = ($1..$2);
-    } else {
-	@trackNums = split /,/, $arg;
-    }
-    my %work = ();
-    my @tracks = ();
-    foreach $i (@trackNums) {
-	die "Track $i is not defined\n" if ($i > $obj->numTracks());
-	die "Track $i in multiple works\n" unless (defined $uncheckedTracks{$i});
-	delete $uncheckedTracks{$i};
-	$track = $obj->getTrack($i)  || die "Could not find track $i\n";
-	push @tracks, $track;
-    }
-    findCommon(\%work, @tracks);
-    @tracks = sort {$a->{TRACKNUMBER} <=> $b->{TRACKNUMBER}} @tracks;
-    $work{tracks} = \@tracks if (@tracks > 1);
-    push @works, \%work;
 }
 
 if (keys %uncheckedTracks != 0) {
@@ -45,6 +30,37 @@ if (keys %uncheckedTracks != 0) {
 %obj = ();
 findCommon(\%obj, @works);
 $obj{"works"} = \@works;
+
+sub processWork {
+    my $arg = shift;
+    if ($arg =~ /([\d]+)-([\d]+)/) {
+	@trackNums = ($1..$2);
+    } else {
+	@trackNums = split /,/, $arg;
+    }
+    my %work = ();
+    my @tracks = ();
+    foreach my $i (@trackNums) {
+	die "Track $i is not defined\n" if ($i > $obj->numTracks());
+	die "Track $i in multiple works\n" unless (defined $uncheckedTracks{$i});
+	delete $uncheckedTracks{$i};
+	my $track = $obj->getTrack($i)  || die "Could not find track $i\n";
+	push @tracks, $track;
+    }
+    my @titles = map { $_->{TITLE}; } @tracks;
+    my $title = findCommonString(@titles);
+    print "Common title $arg:  ", $title, "\n";
+    setTitle ($title, @tracks);
+
+    if ($title =~ /^(.*),\s*Op.\s*([0-9]+)\s*$/) {
+	$title = $1;
+	setOpus($2, @tracks);
+    }
+    findCommon(\%work, @tracks);
+    @tracks = sort {$a->{TRACKNUMBER} <=> $b->{TRACKNUMBER}} @tracks;
+    $work{tracks} = \@tracks if (@tracks > 1);
+    push @works, \%work;
+}
 
 rename $file, "$file.bak" || die "Could not move $file";
 open OUTPUT, "> $file" || die "Could not open $file for writing";
@@ -73,4 +89,41 @@ sub findCommon {
             }
         }
     }
+}
+
+sub setTitle {
+    my $newTitle = shift;
+    my @tracks = @_;
+    my $len = length $newTitle;
+    foreach my $track (@tracks) {
+	my $title = $track->{TITLE};
+	my $part = substr($title, $len);
+	$part =~ s/^:\s*//g;
+	# print "$title :: $newTitle :: $part\n";
+	$track->{TITLE} = $newTitle;
+	$track->{PART} = $part if (length $part > 0);
+    }
+}
+
+sub setOpus {
+    my $opus = shift;
+    my @tracks = @_;
+    my $len = length $newTitle;
+    foreach my $track (@tracks) {
+	$track->{OPUS} = $opus;
+    }
+}
+
+sub findCommonString {
+    my @strings = @_;
+    my $string = shift @strings;
+    while ($target = shift @strings) {
+	my $len = length($string);
+	while (($len > 0) && ($string ne substr($target, 0, $len))) {
+	    $string = substr( $string, 0, $len - 1);
+	    $len--;
+	}
+    }
+    $string = $1 if ($string =~ /^(.*):\s*[iI]*/);
+    return $string;
 }
