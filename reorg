@@ -10,28 +10,35 @@ use Getopt::Long;
 use Unicode::String;
 use File::Spec;
 use File::Path;
+use File::Copy;
 use Cwd;
 
 # Set up options processing
 $mp3base	= "/music/MP3/CD";
 $flacbase	= "/music/FLAC";
 $variousArtists	= "VariousArtists";
+$classicalName	= "Classical";
+$noArtist	= "NoArtist";
 $utf8		= 1;
 $compilation	= 0;
+$classical	= 0;
 $dorename	= 1;
 $cleanUp	= 0;
 $split		= 0;
+$inplace	= 0;
 @dragfiles	= ();
 
 $result = GetOptions(
 		     "utf8!" =>	\$utf8,
 		     "base=s" => \$mp3base,
 		     "compilation" => \$compilation,
+		     "classical" => \$classical,
 		     "various=s" => \$variousArtists,
 		     "drag=s"	=> \@dragfiles,
 		     "rename!" => \$dorename,
 		     "clean!" => \$cleanUp,
 		     "split!" => \$split,
+		     "inplace!" => \$inplace,
 		     "flacbase=s" => \$flacbase,
 		     "mp3base=s" => \$mp3base,
 		     "help" => \$help
@@ -105,17 +112,21 @@ sub renameFile {
 
 sub renameFLAC {
     my $file = shift;
-    my $vaTag = 0;
     my $disc = undef;
     my $flac = Audio::FLAC::Header->new($file) || return "Could not read tags from $file";
     my $tags = $flac->tags() || return "No tags found in $file";
-    my $artist = latin1(munge($tags->{"ARTIST"})) || return "No artist tag in $file";
+    my $artist = latin1(munge($tags->{"ARTIST"}));
     my $album  = latin1(munge($tags->{"ALBUM"}))  || return "No album tag in $file";
     my $title  = latin1(munge($tags->{"TITLE"}))  || return "No title tag in $file";
     my $track  = $tags->{"TRACKNUMBER"} || return "No track tag in $file";;
-    $vaTag = 1 if (defined $tags->{"COMPILATION"});
+
     my $disc  = int ($tags->{"SET"}) if (defined $tags->{"SET"});
-    doRename($file, $artist, $album, $title, $track, $disc, $vaTag, $flacbase, ".flac");
+
+    my $vaTag = 1 if (defined $tags->{"COMPILATION"});
+    my $clTag = 1 if ($tags->{"GENRE"} =~ /^[Cc]lassical/);
+
+    my $dir = makeDirName($artist, $vaTag, $clTag);
+    doRename($file, $dir, $album, $title, $track, $disc, $flacbase, ".flac");
 }
 
 sub renameMP3 {
@@ -124,32 +135,49 @@ sub renameMP3 {
     my $disc = undef;
     my $mp3 = MP3::Tag->new($file)      || return "Could not read $file";
     $mp3->get_tags()                    || return "Could not get tags in $file";
-    my $artist = utf8(munge($mp3->artist())) || return "No artist tag in $file";
+    my $artist = utf8(munge($mp3->artist()));
     my $album  = utf8(munge($mp3->album()))  || return "No album tag in $file";
     my $title  = utf8(munge($mp3->title()))  || return "No title tag in $file";	
     my $track  = $mp3->track()		     || return "No track tag in $file";
 
     my $id3v2 = $mp3->{ID3v2};
-    my ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
-    $vaTag = 1 if (defined $info);
     my ($info, $name, @rest) = $id3v2->get_frame("TPOS") if (defined $id3v2);
     my $disc  = int ($info) if (defined $info);
 
-    doRename($file, $artist, $album, $title, $track, $disc, $vaTag, $mp3base, ".mp3");
+    my ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
+    my $vaTag = 1 if (defined $info);
+    my $clTag = 1 if ($mp3->genre() =~ /^[Cc]lassical/);
+    $dir = makeDirName($artist, $vaTag, $clTag);
+
+    doRename($file, $dir, $album, $title, $track, $disc, $mp3base, ".mp3");
+}
+
+sub makeDirName {
+    my ($artist, $vaTag, $clTag) = @_;
+    $dir = $artist;
+    $dir = $variousArtists  	if ($vaTag || $compilation);
+    $dir = $classicalName      	if ($clTag || $classical);
+    $dir = $noArtist	   	unless defined $dir;
+    return $dir;
 }
 
 sub doRename {
-    my ($file, $artist, $album, $title, $track, $disc, $varArtists, $basedir, $suffix) = @_;
+    my ($file, $dir, $album, $title, $track, $disc, $basedir, $suffix) = @_;
 
-    $artist = $variousArtists if ($varArtists || $compilation);
 
     $track = int($track);
     $track = "0$track" if ($track < 10);
     $track = "$disc-$track" if (defined $disc);
 
+    my $newdir;
+    if ($inplace) {
+	my $sink;
+	($sink, $newdir, $sink) = File::Spec->splitpath(Cwd::realpath($file));
+    } else {
+	$newdir = File::Spec->catdir($basedir,$dir,$album);
+    }
 
     my $newfile = "$track.$title$suffix";
-    my $newdir = File::Spec->catdir($basedir,$artist,$album);
     my $newpath = File::Spec->catfile($newdir, $newfile);
     if (Cwd::realpath($file) eq Cwd::realpath($newpath)) {
 	print "Not moving $file.  Name not changed\n";
@@ -162,7 +190,7 @@ sub doRename {
     if (-e $newpath) {
 	return "$file Target $newpath exists.  Not moved."
     } else {
-	rename $file, $newpath if ($dorename) || return "Could not move $file to $newpath\n";
+	rename($file, $newpath) if ($dorename) || return "Could not move $file to $newpath\n";
     }
     drag($file, $newdir);
     purgeDir($file) if ($cleanUp);
@@ -210,6 +238,8 @@ sub doDrag {
 	    }
 	    if (-e $newpath) {
 		return "$file Target $newpath exists.  Not moved."
+	    } elsif ($split) {
+		copy($oldpath, $newpath) if ($dorename) || die "Could not copy $oldpath to $newpath\n";
 	    } else {
 		rename $oldpath, $newpath if ($dorename) || die "Could not move $oldpath to $newpath\n";
 	    }
@@ -247,5 +277,7 @@ __DATA__
 	-b path	--base=path	Create Targets in path.  Must be in the same filesystem as originals.
 	-v name	--various=name	Name of Various Artists directory.
 	-d 	--drag=s	Drag files with this name along with music files.  Multiple can be specified.
+	-s	--[no]split	Split the files between flac and mp3 files.
+	-i	--[no]inplace	Change the file names in the current directory only.  Do not move to other dirs
 	-r	--rename	Actually do the rename (--norename for dry run)
 	-h	--help		This screen.
