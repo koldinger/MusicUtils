@@ -116,7 +116,7 @@ sub mkTmpDir {
     }
     return if ($files == 0);
     my ($dummy, $dummy, $dbFileName) =  File::Spec->splitpath($database);
-    my $dbDest = File::Spec->catfile($dir, $dbFileName);
+    my $dbDest = File::Spec->catfile($dir, "Catalog");
     print "$disc: Adding catalog $dbFileName ($dbDest)\n" if ($verbose > 1);
     doLink(Cwd::realpath($database), Cwd::realpath($dbDest)) if ($catalog);
 }
