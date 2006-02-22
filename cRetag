@@ -1,0 +1,270 @@
+#! /usr/bin/perl
+# Copyright Eric Koldinger, 2006
+# kolding @ koldware.com
+# No warranty, expressed, or implied, if you use this program.  Author is not responsible for any
+# damage it may do to your files or sanity.
+
+use lib $ENV{HOME} . "/dev/MusicUtils";
+use MP3::Tag;
+use Audio::FLAC::Header;
+use Getopt::Long;
+use Unicode::String;
+use File::Spec;
+use ClassicalDB;
+
+# Set up options processing
+$cddbDir	= $ENV{"HOME"} . "/.cddb";
+$dbFile		= "disc.json";
+$cddbID		= undef;
+$trackNumber	= undef;
+$utf8		= 0;
+$help		= 0;
+
+$globalCDDB	= undef;
+
+$result = GetOptions(
+		     "file=s" => \$dbFile,
+		     "id=s" => \$cddbID,
+		     "track=i" => \$trackNumber,
+		     "utf8!" =>	\$utf8,
+		     "help" => \$help
+		     );
+
+@deleteFLAC = qw(ARTIST ALBUM TITLE PART YEAR DATE COMPOSER CONDUCTOR BAND ENSEMBLE);
+@deleteMP3 = qw(TPE1 TPE2 TPE3 TIT1 TIT2 TIT3 TCOM TCON TALB TPOS TYER TPUB);
+
+%mp3TagMapping = (
+    'GROUP' 		=> 'TIT1',
+    'TITLE' 		=> 'TIT2' ,
+    'PART' 		=> 'TIT3' ,
+    'ARTIST' 		=> 'TPE1' ,
+    'BAND' 		=> 'TPE2' ,
+    'CONDUCTOR' 	=> 'TPE3' ,
+    'ALBUM' 		=> 'TALB' ,
+    'YEAR' 		=> 'TYER' ,
+    'COMMENT' 		=> 'COMM' ,
+    'TRACKNUMBER' 	=> 'TRCK' ,
+    'GENRE' 		=> 'TCON' ,
+    'LABEL' 		=> 'TPUB' ,
+    'COMPOSER' 		=> 'TCOM' ,
+    'GENRE' 		=> 'TCON' ,
+    'DISKNUMBER' 	=> 'TPOS' ,
+    'COMPILATION'	=> 'TCMP' 
+);
+
+if (!$result)
+{
+    print "Invalid options\n";
+}
+
+if ($help || !$result) {
+    usage();
+    exit;
+}
+
+if (defined $cddbFile)
+{
+    $globalCDDB = CDDB::File->new($cddbFile) || die "Could not open CDDB file $cddbFile\n";
+} else {
+    loadCDDB();
+}
+
+$numFailures = 0;
+$classDB = ClassicalDB->parse($dbFile);
+
+## Now, parse the various files
+foreach $file (@ARGV)
+{
+    my $result = 0;
+    $result = setTagsMP3($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.mp3$/);;
+    $result = setTagsFLAC($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.flac$/);
+    if ($result ne 0)
+    {
+	chomp $result;
+	print $result, "\n";
+	$numFailures++;
+    }
+}
+
+$numFailures;
+
+sub setTagsFLAC {
+    my ($file, $track, $discid, $cddb) = @_;
+    print "Setting tags in $file\n";
+
+    my $flac = Audio::FLAC::Header->new($file);
+    my $tags = $flac->tags();
+
+    #my $cddb 	= $globalCDDB;
+    #my $discid 	= $cddbID;
+    my $track 	= $trackNumber;
+
+    ## If no CDDB file is specified, let's get one.
+    #if (!defined $cddb) {
+    	#if (!defined $discid) {
+	    #return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $tags->{"CDDB"});
+	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+	    #($discid) = split/,/, $tags->{"CDDB"};
+	#}
+	#$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
+    #}
+
+
+    if (!defined $track)
+    {
+	$track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
+	$track =~ int $track;
+    }
+
+
+    $trackInfo = $classDB->getTrack($track) || return "Could not find info for Track $track\n";
+
+    foreach my $key (@deleteFLAC) {
+	delete $tags->{$key};
+    }
+
+    # my ($title, $pos) = parseTitle($cddb->title());
+    foreach my $key (keys %$trackInfo) {
+	next unless defined ($trackInfo->{$key});
+	#print "Setting tag $key to ", $trackInfo->{$key}, "\n";
+	$tags->{$key} = $trackInfo->{$key};
+    }
+
+    my $result = 0;
+    my $result = $flac->write();
+    return "Unable to write flac tag in $file.  Result: $result" if ($result);
+    0;
+}
+
+sub setTagsMP3 {
+    my ($file, $track, $discid, $cddb) = @_;
+    print "Setting tags in $file\n";
+
+    my $mp3 = MP3::Tag->new($file) 	|| return "Could not read $file\n";
+    $mp3->get_tags()	  		|| return "Could not get tags in $file\n";
+
+    my $id3v2 = $mp3->{ID3v2};
+    my $id3v1 = $mp3->{ID3v1};
+
+    my $cddb 	= $globalCDDB;
+    my $discid 	= $cddbID;
+    my $track 	= $trackNumber;
+
+#    ## If no CDDB file is specified, let's get one.
+#    if (!defined $cddb) {
+#    	if (!defined $discid) {
+#	    return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $id3v2);
+#	    my ($txxx, $name) = $id3v2->get_frame("TXXX");
+#	    return "No CDDB DISCID (no TXXX CDDB frame) available in $file.  Must set on command line\n" unless (defined $txxx);
+#	    return "TXXX Frame is not CDDB: " . $txxx->{"Description"} if (!($txxx->{"Description"} eq "CDDB"));
+#	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+#	    ($discid) = split/,/, $txxx->{"Text"};
+#	}
+#	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
+#    }
+#
+    if (!defined $track)
+    {
+	$track = int($mp3->track()) || return "Could not get track in $file.  Must set on command line\n";
+    }
+
+
+    $trackInfo = $classDB->getTrack($track) || return "Could not find info for Track $track\n";
+
+    # remove ID3v1.  We don't need it.
+    $id3v1->remove_tag() if (defined $id3v1);
+
+    $id3v2 = $mp3->new_tag("ID3v2") if (!defined $id3v2);
+
+    #my ($title, $pos) = parseTitle($cddb->title());
+
+    foreach my $key (@deleteMP3) {
+	$id3v2->remove_frame($key);
+    }
+
+    foreach my $key (keys %$trackInfo) {
+	next unless defined ($trackInfo->{$key});
+	next if ($key eq "TRACKNUMBER");
+	#print "Setting tag $key $mp3TagMapping{$key} to ", $trackInfo->{$key}, "\n";
+	$id3v2->add_frame($mp3TagMapping{$key}, 1, $trackInfo->{$key});
+    }
+
+    # $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
+    # TIT2 (Title/songname/content description): 51 Phantom
+    # TPE1 (Lead performer(s)/Soloist(s)): North Mississippi Allstars
+    # TALB (Album/Movie/Show title): 51 Phantom
+    # TCON (Content type): Blues (0)
+    # TYER (Year): 2001
+    # TSIZ (Size): 128
+    # TRCK (Track number/Position in set): 1
+    # USER (Terms of use):  frame
+    $id3v2->write_tag();
+
+    $mp3->close();
+    0;
+}
+
+#
+# Parse the title string.  Look for Disc X of Y, or Disc X.
+# If it exists, pull it out, and return it as a position tag in a set.
+#
+sub parseTitle {
+    my $title = shift;
+    my $pos = undef;
+    if ($title =~ /\s*(.*\w)\s*[\(\[]\s*[Dd]is[ck]\s*([0-9]+)\s*of\s*([0-9]+)\s*[\)\]]/) {
+	$title = $1;
+	$pos = "$2/$3";
+    } elsif ($title =~ /\s*(.*\w)\s*[\(\[]\s*[Dd]is[ck]\s*([0-9]+)\s*[\)\]]/) {
+	$title = $1;
+	$pos = "$2";
+    }
+
+    return ($title, $pos);
+}
+
+sub trim {
+    my $line = shift;
+    $line = s/^\s+//;
+    $line = s/\s+//;
+    return $line;
+}
+
+sub translate {
+    my $string = shift;
+    if ($utf8) {
+	$string = Unicode::String::utf8($string)->latin1();
+    } 
+    $string;
+}
+
+sub findCDDB {
+    my $id = shift;
+    return $globalCDDB if (defined $globalCDDB);
+    return $CDDB{$id};
+}
+
+
+sub loadCDDB {
+#    opendir (DIRHANDLE, $cddbDir) || die "Could not open CDDB Database ($cddbDir) for reading\n";
+#    my @files = readdir(DIRHANDLE);
+#    closedir (DIRHANDLE);
+#
+#    foreach my $file (File::Spec->no_upwards(@files)) {
+#	my $filename = File::Spec->catfile($cddbDir, $file);
+#	next if (-d $filename);
+#	my $cddb = CDDB::File->new($filename) || die "Could not open and parse CDDB file $filename\n";
+#	foreach my $id ($cddb->all_ids()) {
+#	    $CDDB{$id} = $cddb;
+#	}
+#    }
+}
+
+sub usage {
+    print <DATA>;
+}
+__DATA__
+	-d CDDB	--db=s		Where to find the CDDB database.
+	-c file	--cddb=file	Explicit file to read data from.
+	-i ID	--id=id		CDDB ID to use istead of from current tag.
+	-t trk	--track=trk	Track number to use instead of from current tag.
+	-h	--help		This screen.
