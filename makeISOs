@@ -4,6 +4,7 @@ use Getopt::Long;
 use Cwd;
 use File::Path;
 use File::Spec;
+use Time::Local;
 
 ## Options, w/ default values
 $database	= "BackupDB";
@@ -17,6 +18,7 @@ $catalog	= 0;
 $symlink	= 1;
 $maxDisc	= 0;
 $purge		= 0;
+$volumeID	= "Backup";
 $root		= undef;
 
 $linktype	= "hard";
@@ -30,6 +32,7 @@ $result = GetOptions(
 		     "catalog!"		=> \$catalog,
 		     "symlink!"		=> \$symlink,
 		     "purge!"		=> \$purge,
+		     "volume=s"		=> \$volumeID,
                      "verbose+" 	=> \$verbose,
 		     "root=s"		=> \$root,
                      "help"		=> \$help
@@ -135,8 +138,14 @@ sub runMkISO {
     my $dir = shift;
     my $output = shift;
 
+
     print "Making ISO Image of $disc in $output from $dir\n";
-    system ("mkisofs -r -R -l -f -q -input-charset=utf8 -o $output $dir");
+    my @command = qw(mkisofs -r -R -l -f -q -input-charset=utf8);
+    push @command, "-o", "$output";
+    push @command, "-V" , "$volumeID:$disc";
+    push @command, $dir;
+    #print @command, "\n";
+    system (@command);
 }
 
 sub cleanup {
