@@ -1,0 +1,26 @@
+#! /usr/bin/perl
+
+use Getopt::Long;
+
+$hex = 0;
+$decimals = 1;
+
+$result = GetOptions(
+     "x!" =>	\$hex,
+     "d=i" =>	\$decimals
+    );
+
+$lower = shift;		$lower = int ($lower);
+$upper = shift;		$upper = int ($upper);
+$increment = shift;
+$increment = 1 if (!defined $increment);
+
+
+if ($hex) {
+    $format = "%0" . $decimals . "x\n";
+} else {
+    $format = "%0" . $decimals . "d\n";
+}
+for ($i = $lower; $i <= $upper; $i += $increment) {
+    printf ($format, $i);
+}
