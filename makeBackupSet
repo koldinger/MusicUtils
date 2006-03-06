@@ -11,6 +11,7 @@ $dvd2size	= 8500000;
 
 ## Globals
 $maxDisc	= 0;
+$firstDisc	= undef;
 $newMaxDisc	= undef;
 $discsCreated	= 0;
 
@@ -45,8 +46,7 @@ $result = GetOptions(
                      "help"		=> \$help
                      );
 
-if (!$result)
-{
+if (!$result) {
     print "GetOptions failed: $result\n";
 }
 if ($cd + $dvd + $dvd2 > 1) {
@@ -75,7 +75,11 @@ foreach $dir (@ARGV) {
     addDir($dir);
 }
 
-$newMaxDisc = $maxDisc if ($fill);
+if ($fill) {
+    print "Setting fill discs to $maxDisc\n";
+    $firstDisc = $maxDisc;
+    $newMaxDisc = $maxDisc;
+}
 resetDiscs() if ($resetDB);
 updateDB() if ($update);
 
@@ -102,7 +106,7 @@ sub addDir {
 	    if (!defined $DB{$file} ||
 		$DB{$file}->{"mtime"} != $mtime ||
 		$DB{$file}->{"size"} != $size) {
-		print ("New file $file\n") if ($verbose > 1&& !(defined $DB{$file}));
+		print ("New file $file\n") if ($verbose > 1 && !(defined $DB{$file}));
 		print ("Updated file $file\n") if ($verbose > 1 && (defined $DB{$file}));
 		if ($size > ($discSize * 1024)) {
 		    print "WARNING: $file is too big to fit on disc.  Skipping.\n";
@@ -167,6 +171,7 @@ sub resetDiscs {
     }
     $maxDisc = 0;
     $newMaxDisc = undef;
+    $firstDisc  = undef;
     %DISCS = undef;
 }
 
@@ -196,7 +201,6 @@ sub makeDiscs {
     print "Added $added files.\n" if ($verbose);
     if ($added) {
 	print "Created " . $discsCreated . " new discs\n" if ($verbose);
-	$maxDisc = $newMaxDisc;
     }
 }
 
@@ -242,8 +246,10 @@ sub addFile {
 sub findDisc {
     my $size = shift;
     my $disc;
-    if ($pack) {
-	foreach $disc (($maxDisc + 1) .. $newMaxDisc) {
+    if ($pack && defined $firstDisc) {
+	foreach $disc ($firstDisc .. $newMaxDisc) {
+	    print "Checking Disc $disc for $size available space: ", $DISCS{$disc}->{"used"}, " ", $DISCS{$disc}->{"capacity"}, "\n"
+		if ($verbose > 1);
 	    if (($DISCS{$disc}->{"used"} + $size) < $DISCS{$disc}->{"capacity"}) {
 		return $disc;
 	    }
@@ -260,10 +266,9 @@ sub findDisc {
 }
 
 sub newDisc {
-    if (!defined $newMaxDisc) {
-	$newMaxDisc = $maxDisc;
-    }
+    $newMaxDisc = $maxDisc if (!defined $newMaxDisc);
     $newMaxDisc++;
+    $firstDisc = $newMaxDisc if (!defined $firstDisc);
     $discsCreated++;
     $DISCS{$newMaxDisc} = {"capacity" => $discSize, "used" => 0 };
     return $newMaxDisc;
