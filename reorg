@@ -55,7 +55,7 @@ if ($help || !$result) {
     exit;
 }
 
-if (@dragfiles == 0) { @dragfiles = ("cover.jpg"); }
+if (@dragfiles == 0) { @dragfiles = ("cover.jpg", "disc.json"); }
 
 @dragfiles = split(/,/,join(',',@dragfiles));
 
@@ -72,37 +72,59 @@ foreach $file (@ARGV)
 $numFailures;
 
 sub reorgDir {
-    my $file = shift;
-    opendir DIRHANDLE, "$file" || die "Could not open directory $file\n";
+    my $dir = shift;
+    opendir DIRHANDLE, "$dir" || die "Could not open directory $dir\n";
     my @names = readdir(DIRHANDLE);
     closedir DIRHANDLE;
 
-    foreach my $name (File::Spec->no_upwards(@names)) {
-	my $path = File::Spec->catfile($file, $name);
+    my ($artist, $album, $title, $genre, $track, $disc, $composer, $vaTag);
+    my @composers;
+
+    my @files = map { File::Spec->catfile($dir, $_); } File::Spec->no_upwards(@names);
+
+    foreach my $path (@files) {
+	next unless (-e $path);
+	next if (-d $path);
+	if ($path =~ /\.mp3$/) {
+	    ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag) = collectTagsMP3($path);
+	} elsif ($path =~ /\.flac$/) {
+	    ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag) = collectTagsFlac($path);
+	}
+	push @composers, $composer if (defined $composer && !contains($composer, @composers));
     }
 
-    foreach my $name (File::Spec->no_upwards(@names)) {
-	my $path = File::Spec->catfile($file, $name);
+    print "Composers in $dir: ", @composers, "\n";
+    @composers = sort { $a cmp $b } @composers;
+    if (@composers > 4) {
+	$composers = join (" & ", $composers[0], "et al");
+    } else {
+	$composers = join (" & ", @composers);
+    }
+    print "Composers String $dir: ", $composers, "\n";
+
+    foreach my $path (@files) {
 	next unless (-e $path);
 	if (-d $path) {
 	    reorgDir($path);
 	} else {
-	    renameFile($path);
+	    renameFile($path, $composers);
 	}
     }
 }
 
+
 sub renameFile {
     my $file = shift;
+    my $composerString = shift;
     my $result;
     my $artist, $album, $title, $album, $track, $disc, $genre, $composer, $vaTag;
     my $suffix, $basedir;
     if ($file =~ /\.mp3$/) {
-	($artist, $album, $title, $genre, $track, $disc, $composer, $vaTag) = collectTagsMP3($file);
+	($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag) = collectTagsMP3($file);
 	$suffix = ".mp3"; $basedir = $mp3base;
     } elsif ($file =~ /\.flac$/) {
-	($artist, $album, $title, $genre, $track, $disc, $composer, $vaTag) = collectTagsFlac($file);
-	$suffix = ".flac"; $basedir = $flacbask;
+	($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag) = collectTagsFlac($file);
+	$suffix = ".flac"; $basedir = $flacbase;
     } else {
 	print "$file: Not tagged type\n";
 	return;
@@ -116,7 +138,7 @@ sub renameFile {
 	return;
     }
     my $clTag = 1 if ($genre =~ /^[Cc]lassical/);
-    my $dir = makeDirName($artist, $vaTag, $clTag);
+    my $dir = makeDirName($artist, $vaTag, $clTag, $composerString);
     doRename($file, $dir, $album, $title, $track, $disc, $basedir, $suffix);
 }
 
@@ -130,6 +152,7 @@ sub collectTagsFlac {
     my $artist = latin1($tags->{"ARTIST"});
     my $album  = latin1($tags->{"ALBUM"})  	|| return "No album tag in $file";
     my $title  = latin1($tags->{"TITLE"})  	|| return "No title tag in $file";
+    $title = $title . ", " . latin1($tags->{"PART"}) if (defined $tags->{"PART"});
     my $genre  = latin1($tags->{"GENRE"})  	|| return "No genre tag in $file";
     my $track  = int($tags->{"TRACKNUMBER"}) 	|| return "No track tag in $file";;
     $composer = latin1($tags->{"COMPOSER"});
@@ -157,20 +180,24 @@ sub collectTagsMP3 {
     my ($info, $name, @rest) = $id3v2->get_frame("TPOS") if (defined $id3v2);
     $disc  = int ($info) if (defined $info);
     ($info, $name, @rest) = $id3v2->get_frame("TCOM") if (defined $id3v2);
+
     $composer = utf8($info) if (defined $info);
 
     ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
     $vaTag = 1 if (defined $info);
 
-    return ($artist, $album, $title, $genre, $track, $disc, $vaTag);
+    return ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag);
 }
 
 sub makeDirName {
-    my ($artist, $vaTag, $clTag) = @_;
-    $dir = $artist;
-    $dir = $variousArtists  	if ($vaTag || $compilation);
-    $dir = $classicalName      	if ($clTag || $classical);
-    $dir = $noArtist	   	unless defined $dir;
+    my ($artist, $vaTag, $clTag, $clDir) = @_;
+    $dir = munge($artist);
+    $dir = munge($variousArtists)  	if ($vaTag || $compilation);
+    if ($clTag || $classical) {
+	$dir = munge($classicalName);
+	$dir = File::Spec->catdir($dir, munge($clDir)) if (defined $clDir) 
+    }
+    $dir = munge($noArtist)	   	unless defined $dir;
     return $dir;
 }
 
@@ -186,7 +213,7 @@ sub doRename {
 	my $sink;
 	($sink, $newdir, $sink) = File::Spec->splitpath(Cwd::realpath($file));
     } else {
-	$newdir = File::Spec->catdir($basedir,munge($dir),munge($album));
+	$newdir = File::Spec->catdir($basedir, $dir, munge($album));
     }
 
     my $newfile = munge("$track.$title$suffix");
@@ -262,7 +289,7 @@ sub doDrag {
 sub munge {
     #echo "$@" | sed s,:,\ -,g | tr \ / __ | tr -d \'\"\?\[:cntrl:\]
     my $name = shift;
-    $name =~ s/[\"\'\?]//g;
+    $name =~ s/[\$\"\'\?]//g;
     $name =~ s/[ \/]/_/g;
     $name =~ s/:/_-/g;
     return $name;
@@ -281,6 +308,14 @@ sub latin1 {
     return $name;
 }
 
+sub contains {
+    my $element = shift;
+    my @list = @_;
+    foreach my $listElem (@list) {
+	return 1 if ($listElem eq $element);
+    }
+    return 0;
+}
 
 sub usage {
     print <DATA>;
