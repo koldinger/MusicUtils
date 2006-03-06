@@ -48,7 +48,9 @@ $result = GetOptions(
     'LABEL' 		=> 'TPUB' ,
     'COMPOSER' 		=> 'TCOM' ,
     'GENRE' 		=> 'TCON' ,
+    'DISCNUMBER' 	=> 'TPOS' ,
     'DISKNUMBER' 	=> 'TPOS' ,
+    'SET' 		=> 'TPOS' ,
     'COMPILATION'	=> 'TCMP' 
 );
 
@@ -186,7 +188,7 @@ sub setTagsMP3 {
 	next unless defined ($trackInfo->{$key});
 	next if ($key eq "TRACKNUMBER");
 	#print "Setting tag $key $mp3TagMapping{$key} to ", $trackInfo->{$key}, "\n";
-	$id3v2->add_frame($mp3TagMapping{$key}, 1, $trackInfo->{$key});
+	$id3v2->add_frame($mp3TagMapping{$key}, Unicode::String::utf8($trackInfo->{$key})->latin1());
     }
 
     # $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
