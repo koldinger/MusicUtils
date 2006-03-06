@@ -22,7 +22,7 @@ $json = new JSON(pretty => 1, indent => 4);
     'TPUB' => 'LABEL',
     'TCOM' => 'COMPOSER',
     'TCON' => 'GENRE',
-    'TPOS' => 'DISKNUMBER',
+    'TPOS' => 'SET',
     'TCMP' => 'COMPILATION'
 );
 
