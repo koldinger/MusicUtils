@@ -10,8 +10,8 @@ $result = GetOptions(
      "d=i" =>	\$decimals
     );
 
-$lower = shift;		$lower = int ($lower);
-$upper = shift;		$upper = int ($upper);
+$lower = shift;		$lower = number($lower);
+$upper = shift;		$upper = number($upper);
 $increment = shift;
 $increment = 1 if (!defined $increment);
 
@@ -23,4 +23,10 @@ if ($hex) {
 }
 for ($i = $lower; $i <= $upper; $i += $increment) {
     printf ($format, $i);
+}
+
+sub number {
+    my $num = shift;
+    return hex($num) if ($num =~ /^0x[0-9a-f]+$/);
+    return int($num);
 }
