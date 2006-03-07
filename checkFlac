@@ -1,0 +1,6 @@
+#! /bin/csh
+set noglob
+foreach i (`find . -name *.flac | sort`)
+    echo $i
+    flac -t -s $i
+end

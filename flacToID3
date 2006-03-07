@@ -1,0 +1,28 @@
+#! /usr/bin/perl
+use Unicode::String;
+foreach $mp3 (@ARGV) {
+    @args = ();
+    $tags = $mp3;
+    $tags =~ s/\.mp3$/\.flactags/g;
+    open TAGS, $tags || die "Could not open $tags ($mp3)\n";
+    while (<TAGS>) {
+	chomp;
+	push @args, "--TPE1", Unicode::String::latin1($1)->utf8() 		if (/ARTIST=\s*(\w.*)\s*$/);
+	push @args, "--TPE2", Unicode::String::latin1($1)->utf8() 		if (/BAND=\s*(\w.*)\s*$/);
+	push @args, "--TPE3", Unicode::String::latin1($1)->utf8() 		if (/CONDUCTOR=\s*(\w.*)\s*$/);
+	push @args, "--TALB", Unicode::String::latin1($1)->utf8() 		if (/ALBUM=\s*(\w.*)\s*$/);
+	push @args, "--TIT1", Unicode::String::latin1($1)->utf8() 		if (/GROUP=\s*(\w.*)\s*$/);
+	push @args, "--TIT2", Unicode::String::latin1($1)->utf8() 		if (/TITLE=\s*(\w.*)\s*$/);
+	push @args, "--TIT3", Unicode::String::latin1($1)->utf8() 		if (/PART=\s*(\w.*)\s*$/);
+	push @args, "--TPUB", Unicode::String::latin1($1)->utf8() 		if (/LABEL=\s*(\w.*)\s*$/);
+	push @args, "--TYER", Unicode::String::latin1($1)->utf8() 		if (/DATE=\s*(\w.*)\s*$/);
+	push @args, "--TYER", Unicode::String::latin1($1)->utf8() 		if (/YEAR=\s*(\w.*)\s*$/);
+	push @args, "--TCON", Unicode::String::latin1($1)->utf8() 		if (/GENRE=\s*(\w.*)\s*\(.*\)\s*$/);
+	push @args, "--TRCK", Unicode::String::latin1($1)->utf8() 		if (/TRACKNUMBER=\s*(\w.*)\s*$/);
+	push @args, "--TPOS", Unicode::String::latin1($1)->utf8() 		if (/DISCNUMBER=\s*(\w.*)\s*$/);
+	push @args, "--TPOS", Unicode::String::latin1($1)->utf8() 		if (/SET=\s*(\w.*)\s*$/);
+	push @args, "--TXXX", "CDDB:".Unicode::String::latin1($1)->utf8() 	if (/CDDB=\s*(\w.*)\s*$/);
+    }
+    close TAGS;
+    system ("id3v2", $mp3, @args);
+}

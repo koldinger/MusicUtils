@@ -1,0 +1,35 @@
+#! /usr/bin/perl
+use File::Spec;
+
+$dest = @ARGV[0];
+
+compareDirs(".", $dest);
+
+sub compareDirs {
+    my ($src, $dest) = @_;
+    opendir (DIRHANDLE, $src) || die "Can't open $src\n";
+    my @files = readdir(DIRHANDLE);
+    closedir (DIRHANDLE);
+
+    foreach my $file (sort { $a cmp $b } File::Spec->no_upwards(@files)) {
+	next if ($file eq ".");
+	next if ($file eq "..");
+	my $path = "$src/$file";
+	#print "Checking $path\n";
+	if (-d $path) {
+	    compareDirs ($path, $dest);
+	} else {
+	    next if (!($path =~ /.mp3$/));
+	    my $flac = $path;
+	    $flac =~ s/.mp3$/.flac/;
+	    #print "Testing for $dest/$flac\n";
+	    if (!-e "$dest/$flac") {
+		if (!-e "$flac") {
+		    print "Missing: $flac\n";
+		} else {
+		    print "NotSynced: $flac\n";
+		}
+	    }
+	}
+    }
+}
