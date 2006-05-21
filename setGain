@@ -14,6 +14,7 @@ sub setGain {
     closedir DIR;
 
     my @mp3s = ();
+    my @flacs = ();
     print "Checking $dir\n";
 
     foreach my $file (@files) {
@@ -22,10 +23,17 @@ sub setGain {
 	    setGain ($path);
 	} elsif ($file =~ /.*\.mp3$/) {
 	    push @mp3s, $path;
+	} elsif ($file =~ /.*\.flac$/) {
+	    push @flacs, $path;
 	}
     }
     if (@mp3s != 0) {
 	print "Setting mp3gain in $dir\n";
-	system("mp3gain", "-k", "-a", @mp3s);
+	system("mp3gain", "-p", "-k", "-a", @mp3s);
+    }
+
+    if (@flacs != 0) {
+	print "Setting metaflac replaygain in $dir\n";
+	system("metaflac", "--preserve-modtime", "--add-replay-gain", @flacs);
     }
 }
