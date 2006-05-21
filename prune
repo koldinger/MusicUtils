@@ -3,9 +3,11 @@
 use File::Spec;
 use File::Path;
 
+push @ARGV, "." if (@ARGV == 0);
+
 foreach $i (@ARGV) {
     $dirSize = prune($i) if (-d $i);
-    if ($dirSize == 0) { rmtree($dir); }
+    if ($dirSize == 0 && $i ne ".") { rmtree($i); }
 }
 
 sub prune {
@@ -16,7 +18,7 @@ sub prune {
     closedir DIR;
 
     my $numFiles = @files;
-    print "Pruning $dir: $numFiles\n";
+    print "Pruning $dir\n";
 
     if ($numFiles == 0) { return 0; }
     foreach my $file (@files) {
