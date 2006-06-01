@@ -76,7 +76,7 @@ foreach $dir (@ARGV) {
 }
 
 if ($fill) {
-    print "Setting fill discs to $maxDisc\n";
+    print "Setting fill discs to " . int($maxDisc) . "\n";
     $firstDisc = $maxDisc;
     $newMaxDisc = $maxDisc;
 }
@@ -103,9 +103,7 @@ sub addDir {
 	} else {
 	    my ($dev, $ino, $mode, $nlink, $uid, $gid, $rdev,
 		$size, $atime, $mtime, $ctime, $blksize, $blocks) = stat($file);
-	    if (!defined $DB{$file} ||
-		$DB{$file}->{"mtime"} != $mtime ||
-		$DB{$file}->{"size"} != $size) {
+	    if (!defined $DB{$file} || $DB{$file}->{"mtime"} != $mtime || $DB{$file}->{"size"} != $size) {
 		print ("New file $file\n") if ($verbose > 1 && !(defined $DB{$file}));
 		print ("Updated file $file\n") if ($verbose > 1 && (defined $DB{$file}));
 		if ($size > ($discSize * 1024)) {
@@ -147,9 +145,16 @@ sub loadDB {
 	$dir = $file;
 	$dir =~ s/\/[^\/]+$//g;
 	print "Loading $file\n" if ($verbose > 2);
-	addFile($file, $size, $mtime, $dir, $disc);
+	addFile($file, $size, $mtime, $dir, int($disc));
     }
     close DBFILE;
+    dumpSpace() if ($verbose > 2);
+}
+
+sub dumpSpace {
+    foreach my $key (sort {$a <=> $b} keys %DISCS) {
+	print "$key : " . $DISCS{$key}->{"used"} . "\n";
+    }
 }
 
 sub saveDB {
@@ -186,13 +191,15 @@ sub makeDiscs {
 	    foreach my $file2 (@files) {
 		print "Adding file $file2 to disc $disc\n" if ($verbose > 1);
 		my $fileSize = kSize($file2);
-		if (($DISCS{$disc}->{"used"} + $kSize) > $DISCS{$disc}->{"capacity"}) {
+		if (($DISCS{$disc}->{"used"} + $kSize) > $discSize) {
 		    $disc = newDisc();
 		}
 		## If it's not already on this disc, add it to this disc
 		if ($DB{$file2}->{"disc"} != $disc) {
+		    my $oldDisc = $DB{$file2}->{"disc"};
 		    $added ++;
 		    $DISCS{$disc}->{"used"} += $fileSize;
+		    $DISCS{$disc}->{"altered"} = 1;
 		    $DB{$file2}->{"disc"} = $disc;
 		}
 	    }
@@ -240,7 +247,11 @@ sub addFile {
     } else {
 	push @{$DIR{$dir}}, $file unless contains ($file, @{$DIR{$dir}});
     }
-    $maxDisc = $disc if ($disc > $maxDisc);
+    if (defined $disc) {
+	$DISCS{$disc}->{"used"} += kSize($file);
+	$DISCS{$disc}->{"altered"} = 0;
+	$maxDisc = $disc if ($disc > $maxDisc);
+    }
 }
 
 sub findDisc {
@@ -248,9 +259,12 @@ sub findDisc {
     my $disc;
     if ($pack && defined $firstDisc) {
 	foreach $disc ($firstDisc .. $newMaxDisc) {
-	    print "Checking Disc $disc for $size available space: ", $DISCS{$disc}->{"used"}, " ", $DISCS{$disc}->{"capacity"}, "\n"
+	    my $available = $discSize - $DISCS{$disc}->{"used"};
+	    print "Checking Disc $disc for " . int($size) . " Bytes. " .
+		  "Current usage: " . int($DISCS{$disc}->{"used"}) .  " " .
+		  "Available " . $available . "\n"
 		if ($verbose > 1);
-	    if (($DISCS{$disc}->{"used"} + $size) < $DISCS{$disc}->{"capacity"}) {
+	    if (($DISCS{$disc}->{"used"} + $size) < $discSize) {
 		return $disc;
 	    }
 	}
@@ -259,7 +273,7 @@ sub findDisc {
 	newDisc();
     }
     $disc = $newMaxDisc;
-    if (($DISCS{$disc}->{"used"} + $size) > $DISCS{$disc}->{"capacity"}) {
+    if (($DISCS{$disc}->{"used"} + $size) > $discSize) {
 	return newDisc();
     }
     return $disc;
@@ -270,7 +284,7 @@ sub newDisc {
     $newMaxDisc++;
     $firstDisc = $newMaxDisc if (!defined $firstDisc);
     $discsCreated++;
-    $DISCS{$newMaxDisc} = {"capacity" => $discSize, "used" => 0 };
+    $DISCS{$newMaxDisc} = {"altered" => 0, "used" => 0 };
     return $newMaxDisc;
 }
 
