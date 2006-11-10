@@ -10,7 +10,7 @@ sub setGain {
     my $dir = shift;
     return 1 unless (-d $dir);
     opendir DIR, $dir || return 1;
-    my @files = File::Spec->no_upwards(readdir DIR);
+    my @files = sort { $a <=> $b} File::Spec->no_upwards(readdir DIR);
     closedir DIR;
 
     my @mp3s = ();
@@ -29,7 +29,7 @@ sub setGain {
     }
     if (@mp3s != 0) {
 	print "Setting mp3gain in $dir\n";
-	system("mp3gain", "-p", "-k", "-a", @mp3s);
+	system("mp3gain", "-p", "-k", "-o", @mp3s);
     }
 
     if (@flacs != 0) {
