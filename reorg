@@ -14,8 +14,8 @@ use File::Copy;
 use Cwd;
 
 # Set up options processing
-$mp3base	= "/music/MP3/CD";
-$flacbase	= "/music/FLAC";
+$mp3base	= "/srv/music/MP3/CD";
+$flacbase	= "/srv/music/FLAC";
 $variousArtists	= "VariousArtists";
 $classicalName	= "Classical";
 $noArtist	= "NoArtist";
@@ -93,14 +93,12 @@ sub reorgDir {
 	push @composers, $composer if (defined $composer && !contains($composer, @composers));
     }
 
-    print "Composers in $dir: ", @composers, "\n";
     @composers = sort { $a cmp $b } @composers;
     if (@composers > 4) {
 	$composers = join (" & ", $composers[0], "et al");
     } else {
 	$composers = join (" & ", @composers);
     }
-    print "Composers String $dir: ", $composers, "\n";
 
     foreach my $path (@files) {
 	next unless (-e $path);
