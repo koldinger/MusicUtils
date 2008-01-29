@@ -29,6 +29,7 @@ $fill		= 0;
 $update		= 0;
 $reset		= 0;
 $abspath	= 0;
+$stats		= 0;
 
 $result = GetOptions(
                      "verbose+" 	=> \$verbose,
@@ -43,6 +44,7 @@ $result = GetOptions(
 		     "size=i"		=> \$size,
 		     "update!"		=> \$update,
 		     "reset!"		=> \$reset,
+		     "stats"		=> \$stats,
                      "help"		=> \$help
                      );
 
@@ -87,6 +89,8 @@ makeDiscs();
 
 rename($database, $backup);
 saveDB($database);
+
+dumpSpace() if ($stats);
 
 sub addDir {
     my $dir = shift;
@@ -153,7 +157,7 @@ sub loadDB {
 
 sub dumpSpace {
     foreach my $key (sort {$a <=> $b} keys %DISCS) {
-	print "$key : " . $DISCS{$key}->{"used"} . "\n";
+	print "$key : Files: " . $DISCS{$key}->{"files"} .  " Space: " . int($DISCS{$key}->{"used"}) . " KB\n";
     }
 }
 
@@ -186,7 +190,6 @@ sub makeDiscs {
 	if ($DB{$file}->{"disc"} == 0) {
 	    my @files = collectDir($file);
 	    my $size = totalSize(@files);
-	    print $size
 	    my $disc = findDisc($size);
 	    foreach my $file2 (@files) {
 		print "Adding file $file2 to disc $disc\n" if ($verbose > 1);
@@ -197,9 +200,11 @@ sub makeDiscs {
 		## If it's not already on this disc, add it to this disc
 		if ($DB{$file2}->{"disc"} != $disc) {
 		    my $oldDisc = $DB{$file2}->{"disc"};
+		    $DISCS{$oldDisc}->{"files"} --;
 		    $added ++;
 		    $DISCS{$disc}->{"used"} += $fileSize;
 		    $DISCS{$disc}->{"altered"} = 1;
+		    $DISCS{$disc}->{"files"} ++;
 		    $DB{$file2}->{"disc"} = $disc;
 		}
 	    }
@@ -250,6 +255,7 @@ sub addFile {
     if (defined $disc) {
 	$DISCS{$disc}->{"used"} += kSize($file);
 	$DISCS{$disc}->{"altered"} = 0;
+	$DISCS{$disc}->{"files"} += 1;
 	$maxDisc = $disc if ($disc > $maxDisc);
     }
 }
@@ -284,7 +290,7 @@ sub newDisc {
     $newMaxDisc++;
     $firstDisc = $newMaxDisc if (!defined $firstDisc);
     $discsCreated++;
-    $DISCS{$newMaxDisc} = {"altered" => 0, "used" => 0 };
+    $DISCS{$newMaxDisc} = {"altered" => 0, "used" => 0, "files" => 0 };
     return $newMaxDisc;
 }
 
