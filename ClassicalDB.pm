@@ -24,24 +24,27 @@ sub parse {
 }
 
 sub getTrack {
-    my ($obj, $trackNum) = @_;
+    my ($obj, $trackNum, $set) = @_;
     my $result = {};
     $trackNum = int ($trackNum);
+    $set      = int ($set) if defined $set;
     my $works = $obj->{works};
     if (defined $works) {
 	foreach my $work (@$works) {
-	    if ($work->{TRACKNUMBER} == $trackNum) {
+	    if ((!defined($work->{SET}) && !defined $set) || (int($work->{SET}) == $set)) {
+		if ($work->{TRACKNUMBER} == $trackNum) {
 		    setTags ($obj,  $result);
 		    setTags ($work, $result);
 		    return $result;
-	    }
-	    my $tracks = $work->{tracks};
-	    foreach my $track (@$tracks) {
-		if ($track->{TRACKNUMBER} == $trackNum) {
-		    setTags ($obj,  $result);
-		    setTags ($work, $result);
-		    setTags ($track, $result);
-		    return $result;
+		}
+		my $tracks = $work->{tracks};
+		foreach my $track (@$tracks) {
+		    if ($track->{TRACKNUMBER} == $trackNum) {
+			setTags ($obj,  $result);
+			setTags ($work, $result);
+			setTags ($track, $result);
+			return $result;
+		    }
 		}
 	    }
 	}
@@ -50,9 +53,11 @@ sub getTrack {
     if (defined $tracks) {
 	foreach my $track (@$tracks) {
 	    if ($track->{TRACKNUMBER} == $trackNum) {
-		setTags ($obj,  $result);
-		setTags ($track, $result);
-		return $result;
+		if ((!defined($track->{SET}) && !defined $set) || (int($track->{SET}) == $set)) {
+		    setTags ($obj,  $result);
+		    setTags ($track, $result);
+		    return $result;
+		}
 	    }
 	}
     }
