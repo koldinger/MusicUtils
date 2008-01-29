@@ -2,8 +2,17 @@
 
 use File::Spec;
 use File::Path;
+use Getopt::Long;
+
+@deleteable      = ();
+
+$result = GetOptions(
+                     "delete=s"   =>      \@deleteable,
+                     );
 
 push @ARGV, "." if (@ARGV == 0);
+
+makeHash(@deleteable);
 
 foreach $i (@ARGV) {
     $dirSize = prune($i) if (-d $i);
@@ -31,5 +40,22 @@ sub prune {
 	    }
 	}
     }
-    return $numFiles;
+    # Count the number of files left which can be deleted.
+    my $numDelete = countDeletable(@files);
+    # Match it with what's there.
+    return ($numFiles - $numDelete);
+}
+
+sub countDeletable {
+    my $count = 0;
+    foreach my $file (@_) {
+	$count ++ if (exists $delete{$file});
+    }
+    return $count;
+}
+
+sub makeHash {
+    foreach my $file (@_) {
+	$delete{$file} = 1;
+    }
 }
