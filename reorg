@@ -26,21 +26,23 @@ $dorename	= 1;
 $cleanUp	= 0;
 $split		= 0;
 $inplace	= 0;
+$quiet		= 0;
 @dragfiles	= ();
 
 $result = GetOptions(
-		     "utf8!" =>	\$utf8,
-		     "base=s" => \$mp3base,
-		     "compilation" => \$compilation,
-		     "classical" => \$classical,
-		     "various=s" => \$variousArtists,
-		     "drag=s"	=> \@dragfiles,
-		     "rename!" => \$dorename,
-		     "clean!" => \$cleanUp,
-		     "split!" => \$split,
-		     "inplace!" => \$inplace,
-		     "flacbase=s" => \$flacbase,
-		     "mp3base=s" => \$mp3base,
+		     "utf8!" =>		\$utf8,
+		     "base=s" => 	\$mp3base,
+		     "compilation" => 	\$compilation,
+		     "classical" => 	\$classical,
+		     "various=s" => 	\$variousArtists,
+		     "drag=s"	=> 	\@dragfiles,
+		     "rename!" => 	\$dorename,
+		     "clean!" => 	\$cleanUp,
+		     "split!" => 	\$split,
+		     "inplace!" => 	\$inplace,
+		     "flacbase=s" => 	\$flacbase,
+		     "mp3base=s" => 	\$mp3base,
+		     "quiet!" =>  	\$quiet,
 		     "help" => \$help
 		     );
 
@@ -124,14 +126,14 @@ sub renameFile {
 	($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag) = collectTagsFlac($file);
 	$suffix = ".flac"; $basedir = $flacbase;
     } else {
-	print "$file: Not tagged type\n";
+	msg("$file: Not tagged type\n");
 	return;
     }
     if (!defined $album) 
     {
 	$result = $artist;
 	chomp $result;
-	print $result, "\n";
+	msg($result, "\n");
 	$numFailures++;
 	return;
     }
@@ -217,10 +219,10 @@ sub doRename {
     my $newfile = munge("$track.$title$suffix");
     my $newpath = File::Spec->catfile($newdir, $newfile);
     if (Cwd::realpath($file) eq Cwd::realpath($newpath)) {
-	print "Not moving $file.  Name not changed\n";
+	msg("Not moving $file.  Name not changed\n");
 	return 0;
     }
-    print "Moving $file to $newpath\n";
+    msg("Moving $file to $newpath\n");
     if ($dorename) {
 	mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
     }
@@ -241,7 +243,7 @@ sub purgeDir {
     my $numFiles = File::Spec->no_upwards(readdir(DIR));
     closedir DIR;
     if ($numFiles == 0) {
-	print "Removing empty directory $dir\n";
+	msg("Removing empty directory $dir\n");
 	rmtree($dir);
     }
 }
@@ -266,10 +268,10 @@ sub doDrag {
 	if (-e $oldpath) {
 	    my $newpath = File::Spec->catfile($newdir, $file);
 	    if (Cwd::realpath($oldpath) eq Cwd::realpath($newpath)) {
-		print "Not moving $oldpath.  Name not changed\n";
+		msg("Not moving $oldpath.  Name not changed\n");
 		next;
 	    }
-	    print "Dragging $oldpath to $newpath\n";
+	    msg("Dragging $oldpath to $newpath\n");
 	    if ($dorename) {
 		mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
 	    }
@@ -287,7 +289,7 @@ sub doDrag {
 sub munge {
     #echo "$@" | sed s,:,\ -,g | tr \ / __ | tr -d \'\"\?\[:cntrl:\]
     my $name = shift;
-    $name =~ s/[\$\"\'\?]//g;
+    $name =~ s/[\[\]\$\"\'\?\(\)]//g;
     $name =~ s/[ \/]/_/g;
     $name =~ s/:/_-/g;
     return $name;
@@ -315,15 +317,27 @@ sub contains {
     return 0;
 }
 
+sub msg {
+    my $message = shift;
+    print $message unless $quiet;
+}
+
 sub usage {
     print <DATA>;
 }
+
 __DATA__
 	-u	--utf8		Create target filenames in UTF8
 	-b path	--base=path	Create Targets in path.  Must be in the same filesystem as originals.
 	-v name	--various=name	Name of Various Artists directory.
 	-d 	--drag=s	Drag files with this name along with music files.  Multiple can be specified.
-	-s	--[no]split	Split the files between flac and mp3 files.
+		--clean		Cleanup empty directories and dragged files when done.
+	-s	--[no]split	Split the files between FLAC and MP3 files.
+	-f	--flacbase	Base directory for FLAC files
+	-m	--mp3base	Base directory for MP3 files
+		--compliation	Assume this is a compilation (Various Artists) disc.
+		--classical	Assume this is a classical disc.  Use Classical naming.
 	-i	--[no]inplace	Change the file names in the current directory only.  Do not move to other dirs
-	-r	--rename	Actually do the rename (--norename for dry run)
+	-r	--[no]rename	Actually do the rename (--norename for dry run)
+	-q	--[no]quiet	Be quiet.  No output
 	-h	--help		This screen.
