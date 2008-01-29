@@ -18,6 +18,7 @@ $cddbID		= undef;
 $trackNumber	= undef;
 $utf8		= 0;
 $help		= 0;
+$preserveTS	= 0;
 
 $globalCDDB	= undef;
 
@@ -27,6 +28,7 @@ $result = GetOptions(
 		     "id=s" => \$cddbID,
 		     "track=i" => \$trackNumber,
 		     "utf8!" =>	\$utf8,
+		     "preserve!" => \$preserveTS,
 		     "help" => \$help
 		     );
 
@@ -53,6 +55,13 @@ $numFailures = 0;
 foreach $file (@ARGV)
 {
     my $result = 0;
+
+    if ($preserveTS) {
+	my @stats = stat($file);
+	$atime = $stats[8];
+	$mtime = $stats[9];
+    }
+
     $result = setTagsMP3($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.mp3$/);;
     $result = setTagsFLAC($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.flac$/);
     if ($result ne 0)
@@ -61,6 +70,8 @@ foreach $file (@ARGV)
 	print $result, "\n";
 	$numFailures++;
     }
+
+    utime $atime, $mtime, $file if ($preserveTS);
 }
 
 $numFailures;
@@ -248,4 +259,5 @@ __DATA__
 	-c file	--cddb=file	Explicit file to read data from.
 	-i ID	--id=id		CDDB ID to use istead of from current tag.
 	-t trk	--track=trk	Track number to use instead of from current tag.
+	-p	--preserve	Preserve timestamps
 	-h	--help		This screen.
