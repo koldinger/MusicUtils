@@ -13,7 +13,7 @@ sub parse {
     my $package = shift;
     my $file = shift;
     # print "Opening $file\n";
-    open JSONFILE, $file || croak "Could not open $file";
+    open JSONFILE, "< " . $file or croak "Could not open $file";
     my @lines = <JSONFILE>;
     close JSONFILE;
     my $line = join("", @lines);
