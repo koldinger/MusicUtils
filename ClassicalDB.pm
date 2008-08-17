@@ -30,35 +30,35 @@ sub getTrack {
     $set      = int ($set) if defined $set;
     my $works = $obj->{works};
     if (defined $works) {
-	foreach my $work (@$works) {
-	    if ((!defined($work->{SET}) && !defined $set) || (int($work->{SET}) == $set)) {
-		if ($work->{TRACKNUMBER} == $trackNum) {
-		    setTags ($obj,  $result);
-		    setTags ($work, $result);
-		    return $result;
-		}
-		my $tracks = $work->{tracks};
-		foreach my $track (@$tracks) {
-		    if ($track->{TRACKNUMBER} == $trackNum) {
-			setTags ($obj,  $result);
-			setTags ($work, $result);
-			setTags ($track, $result);
-			return $result;
-		    }
-		}
-	    }
-	}
+        foreach my $work (@$works) {
+            if ((!defined($work->{SET}) && !defined $set) || (int($work->{SET}) == $set)) {
+                if ($work->{TRACKNUMBER} == $trackNum) {
+                    setTags ($obj,  $result);
+                    setTags ($work, $result);
+                    return $result;
+                }
+                my $tracks = $work->{tracks};
+                foreach my $track (@$tracks) {
+                    if ($track->{TRACKNUMBER} == $trackNum) {
+                        setTags ($obj,  $result);
+                        setTags ($work, $result);
+                        setTags ($track, $result);
+                        return $result;
+                    }
+                }
+            }
+        }
     } 
     my $tracks = $obj->{tracks};
     if (defined $tracks) {
-	foreach my $track (@$tracks) {
-	    if ($track->{TRACKNUMBER} == $trackNum) {
-		if ((!defined($track->{SET}) && !defined $set) || (int($track->{SET}) == $set)) {
-		    setTags ($obj,  $result);
-		    setTags ($track, $result);
-		    return $result;
-		}
-	    }
+        foreach my $track (@$tracks) {
+            if ($track->{TRACKNUMBER} == $trackNum) {
+                if ((!defined($track->{SET}) && !defined $set) || (int($track->{SET}) == $set)) {
+                    setTags ($obj,  $result);
+                    setTags ($track, $result);
+                    return $result;
+                }
+            }
 	}
     }
     return undef;
@@ -67,10 +67,10 @@ sub getTrack {
 sub setTags {
     my ($inHash, $outHash) = @_;
     foreach my $key (keys %$inHash) {
-	next if ($key =~ /^[a-z0-9]+$/);
-	next if ref ($inHash->{$key});
-	# print "Found key $key\n";
-	$outHash->{$key} = $inHash->{$key};
+        next if ($key =~ /^[a-z0-9]+$/);
+        next if ref ($inHash->{$key});
+        # print "Found key $key\n";
+        $outHash->{$key} = $inHash->{$key};
     }
 }
 
@@ -79,25 +79,25 @@ sub numTracks {
     my $works = $obj->{works};
     my $numTracks = 0;
     if (defined $works) {
-	foreach my $work (@$works) {
-	    if (defined $work->{TRACKNUMBER}) {
-		my $trackNum = $work->{TRACKNUMBER};
-		$numTracks = $trackNum if ($trackNum > $numTracks);
-	    } else {
-		my $tracks = $work->{tracks};
-		foreach my $track (@$tracks) {
-		    my $trackNum = $track->{TRACKNUMBER};
-		    $numTracks = $trackNum if ($trackNum > $numTracks);
-		}
-	    }
-	}
+        foreach my $work (@$works) {
+            if (defined $work->{TRACKNUMBER}) {
+                my $trackNum = $work->{TRACKNUMBER};
+                $numTracks = $trackNum if ($trackNum > $numTracks);
+            } else {
+                my $tracks = $work->{tracks};
+                foreach my $track (@$tracks) {
+                    my $trackNum = $track->{TRACKNUMBER};
+                    $numTracks = $trackNum if ($trackNum > $numTracks);
+                }
+            }
+        }
     }
     my $tracks = $obj->{tracks};
     if (defined $tracks) {
-	foreach my $track (@$tracks) {
-	    my $trackNum = $track->{TRACKNUMBER};
-	    $numTracks = $trackNum if ($trackNum > $numTracks);
-	}
+        foreach my $track (@$tracks) {
+            my $trackNum = $track->{TRACKNUMBER};
+            $numTracks = $trackNum if ($trackNum > $numTracks);
+        }
     }
     return $numTracks;
 }
