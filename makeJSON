@@ -5,7 +5,8 @@ use JSON;
 use Unicode::String;
 
 $output = "output";
-$json = new JSON(pretty => 1, indent => 4);
+#$json = new JSON(pretty => 1, indent => 4, autoconv => 1);
+$json = JSON->new->allow_nonref;
 
 %mapping = (
     'TIT1' => 'GROUP',
@@ -16,14 +17,15 @@ $json = new JSON(pretty => 1, indent => 4);
     'TPE3' => 'CONDUCTOR',
     'TALB' => 'ALBUM',
     'TYER' => 'YEAR',
-    'COMM' => 'COMMENT',
+#    'COMM' => 'COMMENT',
     'TRCK' => 'TRACKNUMBER',
     'TCON' => 'GENRE',
     'TPUB' => 'LABEL',
     'TCOM' => 'COMPOSER',
     'TCON' => 'GENRE',
     'TPOS' => 'SET',
-    'TCMP' => 'COMPILATION'
+    'TCMP' => 'COMPILATION',
+    'TSOP' => 'ARTISTSORT'
 );
 
 %obj = ();
@@ -37,31 +39,39 @@ foreach $file (@ARGV) {
     next unless defined $id3v2;
 
     $frameIDs_hash = $id3v2->get_frame_ids('truename');
-    $track = {};
+    my $track = {};
 
     foreach my $frame (keys %$frameIDs_hash) {
-	next unless defined $mapping{$frame};
-	my ($name, @info) = $id3v2->get_frame($frame);
-	for my $info (@info) {
-	    if (ref $info) {
-	 	#print "$name ($frame):\n";
-		#while(my ($key,$val)=each %$info) {
-		#    print " * $key => $val\n";
-		#}
-	    } else {
-		# print "$frame: $name: $info\n";
-		$track->{$mapping{$frame}} = Unicode::String::latin1($name)->utf8();
-	    }
-	}
+        if ($frame eq "TXXX")
+        {
+        }
+        else  {
+            next unless defined $mapping{$frame};
+            my ($name, @info) = $id3v2->get_frame($frame);
+            for my $info (@info) {
+                if (ref $info) {
+                    #print "$name ($frame):\n";
+                    #while(my ($key,$val)=each %$info) {
+                    #    print " * $key => $val\n";
+                    #}
+                } else {
+                    # print "$frame: $name: $info\n";
+                    $track->{$mapping{$frame}} = Unicode::String::latin1($name)->utf8();
+                }
+            }
+        }
     }
+
+    # Add ARTISTSORT if it's not already defined.
+    $track->{"ARTISTSORT"} = $track->{"ARTIST"} if defined $track->{"ARTIST"}  && !defined $track->{"ARTISTSORT"};
     push @tracks, $track;
 }
 
 findCommon(\%obj, @tracks);
 
 @tracks = sort {$a->{TRACKNUMBER} <=> $b->{TRACKNUMBER}} @tracks;
-$obj{tracks} = \@tracks;
-print $json->objToJson(\%obj), "\n";
+$obj{tracks} = \@tracks if $#tracks > 0;
+print $json->pretty->encode(\%obj), "\n";
 
 sub findCommon {
     my $obj = shift;

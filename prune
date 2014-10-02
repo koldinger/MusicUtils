@@ -2,6 +2,7 @@
 
 use File::Spec;
 use File::Path;
+use Term::ANSIColor;
 use Getopt::Long;
 
 @deleteable      = ();
@@ -31,14 +32,16 @@ sub prune {
 
     if ($numFiles == 0) { return 0; }
     foreach my $file (@files) {
-	my $path = File::Spec->join($dir, $file);
-	if (-d $path) {
-	    if (prune ($path) == 0) {
-		print "Deleting empty directory: $path\n";
-		rmtree($path);
-		$numFiles --;
-	    }
-	}
+        my $path = File::Spec->join($dir, $file);
+        if (-d $path) {
+            if (prune ($path) == 0) {
+			print color 'bold blue';
+            print "Deleting empty directory: $path\n";
+			print color 'reset';
+            rmtree($path);
+            $numFiles --;
+            }
+        }
     }
     # Count the number of files left which can be deleted.
     my $numDelete = countDeletable(@files);
@@ -49,13 +52,13 @@ sub prune {
 sub countDeletable {
     my $count = 0;
     foreach my $file (@_) {
-	$count ++ if (exists $delete{$file});
+        $count ++ if (exists $delete{$file});
     }
     return $count;
 }
 
 sub makeHash {
     foreach my $file (@_) {
-	$delete{$file} = 1;
+        $delete{$file} = 1;
     }
 }

@@ -32,27 +32,27 @@ $result = GetOptions(
 		     "help" => \$help
 		     );
 
-@deleteFLAC = qw(ARTIST ALBUM TITLE PART YEAR DATE COMPOSER CONDUCTOR BAND ENSEMBLE ARTISTSORT);
+@deleteFLAC = qw(ALBUMARTIST ARTIST ALBUM TITLE PART YEAR DATE COMPOSER CONDUCTOR BAND ENSEMBLE ARTISTSORT);
 @deleteMP3 = qw(TPE1 TPE2 TPE3 TIT1 TIT2 TIT3 TCOM TCON TALB TPOS TYER TPUB TSOP);
 
 %mp3TagMapping = (
     'GROUP' 		=> 'TIT1',
     'TITLE' 		=> 'TIT2' ,
-    'PART' 		=> 'TIT3' ,
+    'PART' 			=> 'TIT3' ,
     'ARTIST' 		=> 'TPE1' ,
-    'BAND' 		=> 'TPE2' ,
+	'ALBUMARTIST'	=> 'TPE2' ,
+    'BAND' 			=> 'TPE2' ,
     'CONDUCTOR' 	=> 'TPE3' ,
     'ALBUM' 		=> 'TALB' ,
-    'YEAR' 		=> 'TYER' ,
+    'YEAR' 			=> 'TYER' ,
     'COMMENT' 		=> 'COMM' ,
     'TRACKNUMBER' 	=> 'TRCK' ,
     'GENRE' 		=> 'TCON' ,
     'LABEL' 		=> 'TPUB' ,
     'COMPOSER' 		=> 'TCOM' ,
-    'GENRE' 		=> 'TCON' ,
     'DISCNUMBER' 	=> 'TPOS' ,
     'DISKNUMBER' 	=> 'TPOS' ,
-    'SET' 		=> 'TPOS' ,
+    'SET' 			=> 'TPOS' ,
     'COMPILATION'	=> 'TCMP' ,
     'ARTISTSORT'	=> 'TSOP'
 );
@@ -77,9 +77,9 @@ foreach $file (@ARGV)
     my $mtime, $atime;
 
     if ($preserveTS) {
-	@stats = stat($file);
-	$atime = $stats[8];
-	$mtime = $stats[9];
+		@stats = stat($file);
+		$atime = $stats[8];
+		$mtime = $stats[9];
     }
 
     $result = setTagsMP3($file, $trackNumber) if ($file =~ /.mp3$/);
@@ -89,9 +89,9 @@ foreach $file (@ARGV)
 
     if ($result ne 0)
     {
-	chomp $result;
-	print $result, "\n";
-	$numFailures++;
+		chomp $result;
+		print $result, "\n";
+		$numFailures++;
     }
 }
 
@@ -108,20 +108,20 @@ sub setTagsFLAC {
 
     if (!defined $track)
     {
-	$track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
-	$track =~ int $track;
+		$track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
+		$track =~ int $track;
     }
 
     $trackInfo = $classDB->getTrack($track) || return "Could not find info for Track $track\n";
 
     foreach my $key (@deleteFLAC) {
-	delete $tags->{$key};
+		delete $tags->{$key};
     }
 
     foreach my $key (keys %$trackInfo) {
-	next unless defined ($trackInfo->{$key});
-	#print "Setting tag $key to ", $trackInfo->{$key}, "\n";
-	$tags->{$key} = $trackInfo->{$key};
+		next unless defined ($trackInfo->{$key});
+		#print "Setting tag $key to ", $trackInfo->{$key}, "\n";
+		$tags->{$key} = $trackInfo->{$key};
     }
 
     my $result = 0;
@@ -135,6 +135,7 @@ sub setTagsMP3 {
     print "Setting tags in $file\n";
 
     my $mp3 = MP3::Tag->new($file) 	|| return "Could not read $file\n";
+	$mp3->config(write_v24 => TRUE);
     $mp3->get_tags()	  		|| return "Could not get tags in $file\n";
 
     my $id3v2 = $mp3->{ID3v2};
@@ -142,13 +143,20 @@ sub setTagsMP3 {
 
     my $track 	= $trackNumber;
 
-    if (!defined $track)
-    {
-	$track = int($mp3->track()) || return "Could not get track in $file.  Must set on command line\n";
+    if (!defined $track) {
+		$track = int($mp3->track()) || return "Could not get track in $file.  Must set on command line\n";
     }
 
+	my $disc	= $discNumber;
+	if (!defined $disc) {
+		if ($id3v2) {
+			my ($a, $b) = $id3v2->get_frame('TPOS');
+			$disc = int ($a) if defined ($a);
+		}
+	}
 
-    $trackInfo = $classDB->getTrack($track) || return "Could not find info for Track $track\n";
+	#print "Disc: $disc, Track $track\n";
+    $trackInfo = $classDB->getTrack($track, $disc) || return "Could not find info for Track $track Disc $disc\n";
 
     # remove ID3v1.  We don't need it.
     $id3v1->remove_tag() if (defined $id3v1);
@@ -156,14 +164,14 @@ sub setTagsMP3 {
     $id3v2 = $mp3->new_tag("ID3v2") if (!defined $id3v2);
 
     foreach my $key (@deleteMP3) {
-	$id3v2->remove_frame($key);
+		$id3v2->remove_frame($key);
     }
 
     foreach my $key (keys %$trackInfo) {
-	next unless defined ($trackInfo->{$key});
-	next if ($key eq "TRACKNUMBER");
-	#print "Setting tag $key $mp3TagMapping{$key} to ", $trackInfo->{$key}, "\n";
-	$id3v2->add_frame($mp3TagMapping{$key}, Unicode::String::utf8($trackInfo->{$key})->latin1());
+		next unless defined ($trackInfo->{$key});
+		next if ($key eq "TRACKNUMBER");
+		#print "Setting tag $key $mp3TagMapping{$key} to ", $trackInfo->{$key}, "\n";
+		$id3v2->add_frame($mp3TagMapping{$key}, Unicode::String::utf8($trackInfo->{$key})->latin1());
     }
 
     # $id3v2->add_frame("TRCK", $trackInfo->number() . "/" . $cddb->track_count());
@@ -218,9 +226,10 @@ sub usage {
     print <DATA>;
 }
 __DATA__
-	-d CDDB	--db=s		Where to find the CDDB database.
-	-c file	--cddb=file	Explicit file to read data from.
-	-i ID	--id=id		CDDB ID to use istead of from current tag.
-	-t trk	--track=trk	Track number to use instead of from current tag.
-	-p      --preserv	Preserve timestamps
-	-h	--help		This screen.
+		     -f --file=s
+		     -p --[no]preserve
+		     -t --track=i
+		     -d --disc=i
+		     -u --[no]utf8
+		     -h --help 
+

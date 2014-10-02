@@ -1,6 +1,5 @@
 #! /usr/bin/perl
 use File::Spec;
-use File::Path;
 
 foreach $i (@ARGV) {
     $dirSize = setGain($i) if (-d $i);
