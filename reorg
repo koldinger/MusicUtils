@@ -14,23 +14,26 @@ use File::Copy;
 use Cwd;
 
 # Set up options processing
-$mp3base    = "/srv/music/MP3/CD";
-$flacbase   = "/srv/music/FLAC";
+$mp3base        = "/srv/music/MP3/CD";
+$flacbase       = "/srv/music/FLAC";
 $variousArtists = "VariousArtists";
 $classicalName  = "Classical";
-$noArtist   = "NoArtist";
-$utf8       = 1;
-$compilation= 0;
-$classical  = 0;
-$dorename   = 1;
-$cleanUp    = 0;
-$split      = 0;
-$inplace    = 0;
-$quiet      = 0;
-$removeDups = 0;
-$maxNameLen = 75;
-$cddbName   = 0;
-@dragfiles  = ();
+$noArtist       = "NoArtist";
+$utf8           = 1;
+$compilation    = 0;
+$classical      = 0;
+$dorename       = 1;
+$cleanUp        = 0;
+$split          = 0;
+$inplace        = 0;
+$dots           = 1;
+$albumArtist    = 0;
+$quiet          = 0;
+$removeDups     = 0;
+$link           = 0;
+$maxNameLen     = 75;
+$cddbName       = 0;
+@dragfiles      = ();
 
 $result = GetOptions(
              "utf8!"        =>  \$utf8,
@@ -46,7 +49,10 @@ $result = GetOptions(
              "RemoveDups!"  =>  \$removeDups,
              "flacbase=s"   =>  \$flacbase,
              "mp3base=s"    =>  \$mp3base,
+             "dots!"        =>  \$dots,
+             'albartist'    =>  \$albumArtist,
              "length=i"     =>  \$maxNameLen,
+             "link!"        =>  \$link,
 			 "cddb!"		=>  \$cddbName,
              "quiet!"       =>  \$quiet,
              "help"         =>  \$help
@@ -193,6 +199,11 @@ sub collectTagsMP3 {
     ($info, $name, @rest) = $id3v2->get_frame("TCMP") if (defined $id3v2);
     $vaTag = 1 if (defined $info);
 
+    if ($albumArtist) {
+        ($info, $name, @rest) = $id3v2->get_frame("TPE2") if (defined $id3v2);
+        $artist = utf8($info) if (defined $info);
+    }
+
 	my ($txxx, $name) = $id3v2->get_frame("TXXX");
 	if ((defined $txxx) && ($txxx->{"Description"} eq "CDDB"))
 	{
@@ -240,7 +251,9 @@ sub doRename {
         msg("Not moving $file.  Name not changed\n");
         return 0;
     }
-    msg("Moving $file to $newpath\n");
+    $action = "Moving";
+    $action = "Linking" if $link;
+    msg("$action $file to $newpath\n");
     if ($dorename) {
         mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
     }
@@ -253,7 +266,11 @@ sub doRename {
         }
         return "$file Target $newpath exists.  Not moved."
     } else {
-        rename($file, $newpath) if ($dorename) || return "Could not move $file to $newpath\n";
+        if ($link) {
+            link($file, $newpath) if ($dorename) || return "Could not link $file to $newpath\n";
+        } else {
+            rename($file, $newpath) if ($dorename) || return "Could not move $file to $newpath\n";
+        }
     }
     drag($file, $newdir);
     purgeDir($file) if ($cleanUp);
@@ -316,6 +333,7 @@ sub munge {
     $name =~ s/[\[\]\$\"\'\?\(\)\<\>\!]//g;
     $name =~ s/[ \/]/_/g;
     $name =~ s/:/_-/g;
+    $name =~ s/[\.]/_/g if ($dots == 0);
     if ($maxNameLen != -1 && length($name) > $maxNameLen) {
         $name = substr($name, 0, $maxNameLen);
     }
@@ -369,5 +387,6 @@ __DATA__
     -l len  --length=n  Set the maximum length of any name component to len
     -R  --[no]RemoveDups    Remove files if the target already exists.
 	    --[no]cddb			Name files cddbId-track.
+    -L --[no]link           Link files instead of moving.
     -q  --[no]quiet Be quiet.  No output
     -h  --help      This screen.
