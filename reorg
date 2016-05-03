@@ -11,6 +11,7 @@ use Unicode::String;
 use File::Spec;
 use File::Path;
 use File::Copy;
+use String::Util qw(trim);
 use Cwd;
 
 # Set up options processing
@@ -31,6 +32,7 @@ $albumArtist    = 0;
 $quiet          = 0;
 $removeDups     = 0;
 $link           = 0;
+$useArticle     = 1;
 $maxNameLen     = 75;
 $cddbName       = 0;
 @dragfiles      = ();
@@ -54,6 +56,7 @@ $result = GetOptions(
              "length=i"     =>  \$maxNameLen,
              "link!"        =>  \$link,
 			 "cddb!"		=>  \$cddbName,
+             "the!"         =>  \$useArticle,
              "quiet!"       =>  \$quiet,
              "help"         =>  \$help
              );
@@ -242,9 +245,9 @@ sub doRename {
 
 	my $newfile;
 	if ($cddbName) {
-		$newfile = munge("$cddb-$track") . $suffix;
+		$newfile = "$cddb-$track" . $suffix;
 	} else {
-		$newfile = munge("$track.$title") . $suffix;
+		$newfile = "$track." . munge($title) . $suffix;
 	}
     my $newpath = File::Spec->catfile($newdir, $newfile);
     if (Cwd::realpath($file) eq Cwd::realpath($newpath)) {
@@ -321,7 +324,11 @@ sub doDrag {
             } elsif ($split) {
                 copy($oldpath, $newpath) if ($dorename) || die "Could not copy $oldpath to $newpath\n";
             } else {
-                rename $oldpath, $newpath if ($dorename) || die "Could not move $oldpath to $newpath\n";
+                if ($link) {
+                    link $oldpath, $newpath if ($dorename) || die "Could not link $oldpath to $newpath\n";
+                } else {
+                    rename $oldpath, $newpath if ($dorename) || die "Could not move $oldpath to $newpath\n";
+                }
             }
         }
     }
@@ -330,10 +337,14 @@ sub doDrag {
 sub munge {
     #echo "$@" | sed s,:,\ -,g | tr \ / __ | tr -d \'\"\?\[:cntrl:\]
     my $name = shift;
+
+    $name = $2 if (!$useArticle && $name =~ /^(The|A|An)\s+(.*)$/);
+
     $name =~ s/[\[\]\$\"\'\?\(\)\<\>\!]//g;
-    $name =~ s/[ \/]/_/g;
     $name =~ s/:/_-/g;
-    $name =~ s/[\.]/_/g if ($dots == 0);
+    $name =~ s/[\.]//g if ($dots == 0);
+    $name = trim($name);
+    $name =~ s/[ \/]/_/g;
     if ($maxNameLen != -1 && length($name) > $maxNameLen) {
         $name = substr($name, 0, $maxNameLen);
     }
