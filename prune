@@ -6,12 +6,16 @@ use Term::ANSIColor;
 use Getopt::Long;
 
 @deleteable      = ();
+$dryRun          = 0;
 
 $result = GetOptions(
                      "delete=s"   =>      \@deleteable,
+                     "N|dryrun!"   =>     \$dryRun,
                      );
 
 push @ARGV, "." if (@ARGV == 0);
+
+print $dryRun;
 
 makeHash(@deleteable);
 
@@ -38,7 +42,7 @@ sub prune {
 			print color 'bold blue';
             print "Deleting empty directory: $path\n";
 			print color 'reset';
-            rmtree($path);
+            rmtree($path) unless $dryRun;
             $numFiles --;
             }
         }
