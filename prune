@@ -7,15 +7,22 @@ use Getopt::Long;
 
 @deleteable      = ();
 $dryRun          = 0;
+$macFiles        = 0;
+$help            = 0;
+$verbose         = 0;
+
 
 $result = GetOptions(
-                     "delete=s"   =>      \@deleteable,
-                     "N|dryrun!"   =>     \$dryRun,
+                     "delete=s"   =>    \@deleteable,
+                     "M|mac!"     =>    \$macFiles,
+                     "N|keep!"    =>    \$dryRun,
+                     "v|verbose"  =>    \$verbose,
+                     "help"       =>    \$help,
                      );
 
-push @ARGV, "." if (@ARGV == 0);
+showusage() if $help;
 
-print $dryRun;
+push @ARGV, "." if (@ARGV == 0);
 
 makeHash(@deleteable);
 
@@ -32,18 +39,18 @@ sub prune {
     closedir DIR;
 
     my $numFiles = @files;
-    print "Pruning $dir\n";
+    print "Pruning $dir\n" if $verbose;
 
     if ($numFiles == 0) { return 0; }
     foreach my $file (@files) {
         my $path = File::Spec->join($dir, $file);
         if (-d $path) {
             if (prune ($path) == 0) {
-			print color 'bold blue';
-            print "Deleting empty directory: $path\n";
-			print color 'reset';
-            rmtree($path) unless $dryRun;
-            $numFiles --;
+                print color 'bold blue';
+                print "Deleting empty directory: $path\n";
+                print color 'reset';
+                rmtree($path) unless $dryRun;
+                $numFiles --;
             }
         }
     }
@@ -56,7 +63,11 @@ sub prune {
 sub countDeletable {
     my $count = 0;
     foreach my $file (@_) {
-        $count ++ if (exists $delete{$file});
+        if (exists $delete{$file}) {
+            $count++
+        } elsif ($macFiles && $file =~ /^\._.*/) {
+            $count++
+        }
     }
     return $count;
 }
@@ -65,4 +76,17 @@ sub makeHash {
     foreach my $file (@_) {
         $delete{$file} = 1;
     }
+}
+
+sub showusage {
+    print <<"EOT";
+Usage: $0 [--delete file] [--mac] [--dryrun] [--verbose] [--help] directories
+        --delete|-d file        Delete files with this name as well.   Can be repeated.
+        --mac|-M                Delete Mac files that start with ._
+        --dryrun|-N             Don't actually delete anything, just list what's being deleted.
+        --verbose|-v            List all directories as they're processed
+        --help|-h               Show this help.
+        directories             List of directories to prune.   If none are listed, . is used.
+EOT
+    exit 0;
 }
