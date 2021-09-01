@@ -6,8 +6,10 @@
 
 use MP3::Tag;
 use Audio::FLAC::Header;
+use Audio::M4P::QuickTime;
 use Getopt::Long;
 use Unicode::String;
+use Unicode::Normalize;
 use File::Spec;
 use File::Path;
 use File::Copy;
@@ -27,13 +29,15 @@ $dorename       = 1;
 $cleanUp        = 0;
 $split          = 0;
 $inplace        = 0;
-$dots           = 1;
+$dots           = 0;
 $albumArtist    = 0;
 $quiet          = 0;
 $removeDups     = 0;
 $link           = 0;
 $useArticle     = 1;
 $maxNameLen     = 75;
+$normalize      = 0;
+$accents        = 0;
 $cddbName       = 0;
 @dragfiles      = ();
 
@@ -55,6 +59,8 @@ $result = GetOptions(
              'albartist'    =>  \$albumArtist,
              "length=i"     =>  \$maxNameLen,
              "link!"        =>  \$link,
+             #"normalize!"   =>  \$normalize,
+             #"accents!"     =>  \$accents,
 			 "cddb!"		=>  \$cddbName,
              "the!"         =>  \$useArticle,
              "quiet!"       =>  \$quiet,
@@ -102,10 +108,12 @@ sub reorgDir {
     foreach my $path (@files) {
         next unless (-e $path);
         next if (-d $path);
-        if ($path =~ /\.mp3$/) {
-            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP3($path);
-        } elsif ($path =~ /\.flac$/) {
-            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($path);
+        if ($file =~ /\.mp3$/) {
+            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP3($file);
+            $suffix = ".mp3"; $basedir = $mp3base;
+        } elsif ($file =~ /\.flac$/) {
+            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($file);
+            $suffix = ".flac"; $basedir = $flacbase;
         }
         push @composers, $composer if (defined $composer && !contains($composer, @composers));
     }
@@ -141,7 +149,7 @@ sub renameFile {
         ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($file);
         $suffix = ".flac"; $basedir = $flacbase;
     } else {
-        msg("$file: Not tagged type\n");
+        #msg("$file: Not tagged type\n");
         return;
     }
     if (!defined $album) {
@@ -163,16 +171,22 @@ sub collectTagsFlac {
     my $composer = undef;
     my $flac = Audio::FLAC::Header->new($file)  || return "Could not read tags from $file";
     my $tags = $flac->tags() || return "No tags found in $file";
-    my $artist = latin1($tags->{"ARTIST"});
-    my $album  = latin1($tags->{"ALBUM"})       || return "No album tag in $file";
-    my $title  = latin1($tags->{"TITLE"})       || return "No title tag in $file";
+    my $artist = latin1($tags->{"ARTIST"}) || latin1($tags->{"artist"});
+    my $album  = latin1($tags->{"ALBUM"})  || latin1($tags->{"album"})     || return "No album tag in $file";
+    my $title  = latin1($tags->{"TITLE"})  || latin1($tags->{"title"})     || return "No title tag in $file";
     $title = $title . ", " . latin1($tags->{"PART"}) if (defined $tags->{"PART"});
-    my $genre  = latin1($tags->{"GENRE"})       || return "No genre tag in $file";
-    my $track  = int($tags->{"TRACKNUMBER"})    || return "No track tag in $file";;
+    my $genre  = latin1($tags->{"GENRE"})  || latin1($tags->{"genre"});
+    my $track  = int($tags->{"TRACKNUMBER"}) || latin1($tags->{"tracknumber"})  || return "No track tag in $file";;
 	my $cddb   = latin1($tags->{"CDDB"});
     $composer = latin1($tags->{"COMPOSER"});
 
+    if ($albumArtist) {
+        $albArtist = $tags->{"ALBUMARTIST"};
+        $artist = latin1($albArtist) if defined($albArtist);
+    }
+
     $disc  = int ($tags->{"SET"}) if (defined $tags->{"SET"});
+    $disc  = int ($tags->{"DISCNUMBER"}) if (defined $tags->{"DISCNUMBER"});
 
     my $vaTag = 1 if (defined $tags->{"COMPILATION"});
     return ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb);
@@ -189,7 +203,7 @@ sub collectTagsMP3 {
     my $artist = utf8($mp3->artist());
     my $album  = utf8($mp3->album())    || return "No album tag in $file";
     my $title  = utf8($mp3->title())    || return "No title tag in $file";
-    my $genre  = utf8($mp3->genre())    || return "No genre tag in $file";
+    my $genre  = utf8($mp3->genre());
     my $track  = $mp3->track()          || return "No track tag in $file";
 
     my $id3v2 = $mp3->{ID3v2};
@@ -207,11 +221,13 @@ sub collectTagsMP3 {
         $artist = utf8($info) if (defined $info);
     }
 
-	my ($txxx, $name) = $id3v2->get_frame("TXXX");
-	if ((defined $txxx) && ($txxx->{"Description"} eq "CDDB"))
-	{
-	    ($cddb) = split/,/, $txxx->{"Text"};
-	}
+    if (defined $id3v2) {
+        my ($txxx, $name) = $id3v2->get_frame("TXXX");
+        if ((defined $txxx) && ($txxx->{"Description"} eq "CDDB"))
+        {
+            ($cddb) = split/,/, $txxx->{"Text"};
+        }
+    }
 
     return ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb);
 }
@@ -251,12 +267,12 @@ sub doRename {
 	}
     my $newpath = File::Spec->catfile($newdir, $newfile);
     if (Cwd::realpath($file) eq Cwd::realpath($newpath)) {
-        msg("Not moving $file.  Name not changed\n");
+        #msg("Not moving $file.  Name not changed\n");
         return 0;
     }
-    $action = "Moving";
-    $action = "Linking" if $link;
-    msg("$action $file to $newpath\n");
+    $action = "Moving ";
+    $action = "Linking " if $link;
+    msg("$action$file => $newpath\n");
     if ($dorename) {
         mkpath($newdir) || return "Could not create directory $newdir" unless (-d $newdir);
     }
@@ -337,14 +353,17 @@ sub doDrag {
 sub munge {
     #echo "$@" | sed s,:,\ -,g | tr \ / __ | tr -d \'\"\?\[:cntrl:\]
     my $name = shift;
+    my $oldname = $name;
 
     $name = $2 if (!$useArticle && $name =~ /^(The|A|An)\s+(.*)$/);
 
-    $name =~ s/[\[\]\$\"\'\?\(\)\<\>\!]//g;
+    $name =~ s/[&,\[\]\$\"\'\?\(\)\<\>\!]//g;
     $name =~ s/:/_-/g;
     $name =~ s/[\.]//g if ($dots == 0);
     $name = trim($name);
     $name =~ s/[ \/]/_/g;
+    $name =~ s/__/_/g;
+    $name =~ s/_$//g;
     if ($maxNameLen != -1 && length($name) > $maxNameLen) {
         $name = substr($name, 0, $maxNameLen);
     }
