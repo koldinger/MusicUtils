@@ -15,6 +15,11 @@ use File::Path;
 use File::Copy;
 use String::Util qw(trim);
 use Cwd;
+use Memoize;
+
+foreach $i (qw(collectTagsMP3 collectTagsFlac)) {
+    memoize($i)
+}
 
 # Set up options processing
 $mp3base        = "/srv/music/MP3/CD";
@@ -105,7 +110,7 @@ sub reorgDir {
 
     my @files = map { File::Spec->catfile($dir, $_); } File::Spec->no_upwards(@names);
 
-    foreach my $path (@files) {
+    foreach my $path (sort @files) {
         next unless (-e $path);
         next if (-d $path);
         if ($file =~ /\.mp3$/) {
@@ -125,7 +130,7 @@ sub reorgDir {
         $composers = join (" & ", @composers);
     }
 
-    foreach my $path (@files) {
+    foreach my $path (sort @files) {
         next unless (-e $path);
         if (-d $path) {
             reorgDir($path);
@@ -323,7 +328,7 @@ sub drag {
 
 sub doDrag {
     my ($olddir, $newdir) = @_;
-    foreach my $file (@dragfiles) {
+    foreach my $file (sort @dragfiles) {
         my $oldpath = File::Spec->catfile($olddir, $file);
         if (-e $oldpath) {
             my $newpath = File::Spec->catfile($newdir, $file);
