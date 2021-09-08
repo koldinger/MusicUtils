@@ -27,7 +27,7 @@ def processArgs():
     parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                         help='Base dir for MP3 files, if --split' + _def)
     parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                         help='Base dir for MP4 files, if --split' + _def)
     parser.add_argument('--link', '-l', dest='link', default=False, action=argparse.BooleanOptionalAction,      help='Hard link instead of moving' + _def)
-    parser.add_argument('--rename', dest='rename', default=True, action=argparse.BooleanOptionalAction,         help='Rename files.  If false, only ' + _def)
+    parser.add_argument('--rename', dest='rename', default=False, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only ' + _def)
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                          help='List of files to copy along with the music files' + _def)
     parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,    help='Convert to ASCII characters' + _def)
     parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings' + _def)
@@ -53,7 +53,7 @@ def munge(name):
         name = unicodedata.normalize('NFKC', name)
     if args.ascii:
         name = unidecode.unidecode(name)
-    name = re.sub('[&,\[\]\$\"\'\?\(\)\<\>\!\:\;]', '', name)
+    name = re.sub('[&\.\[\]\$\"\'\?\(\)\<\>\!\:\;]', '', name)
     name = re.sub('\s', '_', name)
     name = re.sub('__', '_', name)
     return name
@@ -74,6 +74,12 @@ def makeFName(f, tags):
 
     title = tags.get('title')
     title = title if title else tags.get('track_name', 'Unknown')
+    if tags.get('title__more'):
+        title = title + " " + tags.get('title__more')
+    elif tags.get('track_name__more'):
+        title = title + " " + tags.get('track_name__more')
+    elif tags.get('part'):
+        title = title + " " + str(tags.get('part'))
 
     if diskno:
         trk = "{0}-{1}".format(noSlash(diskno), noSlash(tags.get('track_name_position', '0')).zfill(2))
@@ -88,16 +94,26 @@ def makeFName(f, tags):
     log.debug(f"Name {f.name} -> {name}")
     return name
 
-def makeClassicalDName(f, tags):
-    return args.classical
+def makeComposerString(composers):
+    # Make a unique list of composers.
+    unique = list(map(munge, list(dict.fromkeys(composers))))
 
-def makeDName(f, tags):
+    string = ",_&_".join(unique[0:2])
+    if len(unique) > 2:
+        string += '_et_al'
+
+    return string
+
+
+def makeDName(f, tags, performer):
     if args.inplace:
         base = f.parent
     else:
         base = pathlib.Path(bases[tags['format']])
 
-        if tags.get('compilation') == 'Yes':
+        if performer is not None:
+            artist = performer
+        elif tags.get('compilation') == 'Yes':
             artist = args.various
         elif args.albartist and tags.get('album_performer'):
             artist = tags.get('album_performer')
@@ -124,18 +140,19 @@ def getTags(f):
         raise NotAudioException(f"{f} is not an audio type")
 
 def makeName(f, tags, dirname = None):
-    if dirname is None:
-        dirname = makeDName(f, tags)
+    dirname = makeDName(f, tags, dirname)
 
     newFile = dirname.joinpath(makeFName(f, tags))
     
     log.debug(f"FullName {f} -> {newFile}")
     return newFile
 
-def renameFile(f, tags, dragFiles=[], dirname=None):
+def renameFile(f, tags, dragFiles=[], performer=None):
     action = "Linking" if args.link else "Moving"
-    #log.debug(f"Renaming {f.name}")
-    dest = makeName(f, tags, dirname)
+    if not args.rename:
+        action = "[TESTING] " + action
+    log.debug(f"Renaming {f.name}")
+    dest = makeName(f, tags, performer)
     try:
         if dest.exists():
             log.warning(f"{dest} exists, skipping")
@@ -157,12 +174,18 @@ def renameFile(f, tags, dragFiles=[], dirname=None):
         log.warning(e)
     except Exception as e:
         log.warning(f"Caught exception {e} processing {f.name}")
+        log.execption(e)
 
 def reorgDir(d):
     try:
         log.info(f"Processing Directory {d}")
         dirs = []
+        audio = []
+        composers = []
         files = sorted(filter(lambda x: not x.name.startswith('.'), list(d.iterdir())))
+
+        composerStr = None
+
         for f in files:
             try:
                 log.debug(f"Checking {f}")
@@ -170,12 +193,20 @@ def reorgDir(d):
                     dirs.append(f)
                 elif f.is_file():
                     tags = getTags(f)
-                    renameFile(f, tags)
+                    audio.append((f, tags))
+                    if tags.get('genre', '').startswith(args.classical) and tags.get('composer'):
+                        composers.append(tags.get('composer'))
             except NotAudioException as e:
                 log.warning(e)
             except Exception as e:
                 log.warning(f"Caught exception processing {name}: {e}")
                 log.exception(e)
+
+        if composers:
+            composerStr = makeComposerString(composers)
+
+        for f in audio:
+            renameFile(f[0], f[1], performer=composerStr)
 
         for f in dirs:
             reorgDir(f)
