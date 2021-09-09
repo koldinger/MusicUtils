@@ -17,7 +17,7 @@ class NotAudioException(Exception):
     pass
 
 def processArgs():
-    _def = ' Default: %(default)s'
+    _def = ' (default: %(default)s)'
 
     parser = argparse.ArgumentParser(description="Reorganize music files", add_help=True)
 
@@ -26,15 +26,15 @@ def processArgs():
     parser.add_argument('--flacbase', '-f', dest='flacbase', default='/srv/music/FLAC',                         help='Base dir for FLAC files, if --split' + _def)
     parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                         help='Base dir for MP3 files, if --split' + _def)
     parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                         help='Base dir for MP4 files, if --split' + _def)
-    parser.add_argument('--link', '-l', dest='link', default=False, action=argparse.BooleanOptionalAction,      help='Hard link instead of moving' + _def)
-    parser.add_argument('--rename', dest='rename', default=False, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only ' + _def)
+    parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
+    parser.add_argument('--rename', dest='rename', default=False, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only')
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                          help='List of files to copy along with the music files' + _def)
-    parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,    help='Convert to ASCII characters' + _def)
-    parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings' + _def)
-    parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,    help='Rename files inplace' + _def)
+    parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,    help='Convert to ASCII characters')
+    parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings')
+    parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,    help='Rename files inplace')
     parser.add_argument('--albartist', '-a', dest='albartist', default=True,                                    help='Use album artist for default directory if available' + _def)
     parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                            help='"Artist" name for various artists collections' + _def)
-    parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,  help='Use articles' + _def)
+    parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,  help='Use articles')
     parser.add_argument('--classical', '-C', dest='classical', default='Classical',                             help='Use classical naming if the genre starts with this' + _def)
     parser.add_argument('--classicaldir', '-D', dest='classicaldir', default='Classical',                       help='Store classical files in this subdirectory' + _def)
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                     help='Maximum length of file names' + _def)
@@ -48,14 +48,14 @@ def processArgs():
     return args
 
 def munge(name):
-    name = name.strip()
     if args.normalize:
         name = unicodedata.normalize('NFKC', name)
     if args.ascii:
         name = unidecode.unidecode(name)
-    name = re.sub('[&\.\[\]\$\"\'\?\(\)\<\>\!\:\;]', '', name)
+    name = re.sub('[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;]', '', name)
     name = re.sub('\s', '_', name)
-    name = re.sub('__', '_', name)
+    name = re.sub('_+', '_', name)
+    name.strip('_')
     return name
 
 
@@ -78,8 +78,8 @@ def makeFName(f, tags):
         title = title + " " + tags.get('title__more')
     elif tags.get('track_name__more'):
         title = title + " " + tags.get('track_name__more')
-    elif tags.get('part'):
-        title = title + " " + str(tags.get('part'))
+    #elif tags.get('part'):
+    #    title = title + " " + str(tags.get('part'))
 
     if diskno:
         trk = "{0}-{1}".format(noSlash(diskno), noSlash(tags.get('track_name_position', '0')).zfill(2))
@@ -105,24 +105,23 @@ def makeComposerString(composers):
     return string
 
 
-def makeDName(f, tags, performer):
+def makeDName(f, tags, dirname=None):
     if args.inplace:
         base = f.parent
     else:
         base = pathlib.Path(bases[tags['format']])
 
-        if performer is not None:
-            artist = performer
-        elif tags.get('compilation') == 'Yes':
-            artist = args.various
-        elif args.albartist and tags.get('album_performer'):
-            artist = tags.get('album_performer')
-        else:
-            artist = tags.get('performer', 'Unknown')
+        if dirname is None:
+            if tags.get('compilation') == 'Yes':
+                dirname = args.various
+            elif args.albartist and tags.get('album_performer'):
+                dirname = tags.get('album_performer')
+            else:
+                dirname = tags.get('performer', 'Unknown')
 
-        base = base.joinpath(munge(artist), munge(tags.get('album', 'Unknown')))
+        base = base.joinpath(munge(dirname), munge(tags.get('album', 'Unknown')))
 
-    log.debug(f"Dir {f.parent} -> {base}")
+    log.debug(f"Dir: {f.parent} -> {base}")
     return base
 
 interestingTags = ['format', 'set', 'part_position', 'track_name_position', 'track_name', 'album', 'performer']
@@ -147,29 +146,46 @@ def makeName(f, tags, dirname = None):
     log.debug(f"FullName {f} -> {newFile}")
     return newFile
 
-def renameFile(f, tags, dragFiles=[], performer=None):
+def dragFiles(dragfiles, srcdir, destdir):
+    action = "Linking" if args.link else "Moving"
+    if not args.rename:
+        action = "[TESTING] " + action
+    for f in dragfiles:
+        src = srcdir.joinpath(f)
+        dest = destdir.joinpath(f)
+        if src.exists() and not dest.exists():
+            doMove(src, dest)
+
+def doMove(src, dest):
+    if args.rename:
+        if not dest.parent.exists():
+            log.debug(f"Creating {dest.parent}")
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        elif not dest.parent.is_dir():
+            #log.warning(f"{dest.parent} exists, and is not a directory")
+            raise Exception("{dest.parent} exists, and is not a directory")
+
+        if args.link:
+            src.link_to(dest)
+        else:
+            src.rename(dest)
+
+def renameFile(f, tags, dragfiles=[], dirname=None):
     action = "Linking" if args.link else "Moving"
     if not args.rename:
         action = "[TESTING] " + action
     log.debug(f"Renaming {f.name}")
-    dest = makeName(f, tags, performer)
+    dest = makeName(f, tags, dirname)
     try:
         if dest.exists():
             log.warning(f"{dest} exists, skipping")
             return
-        log.info(f"{action} {f} to {dest}")
+        log.info(f"{action} {f}\t==>  {dest}")
 
         if args.rename:
-            if not dest.parent.exists():
-                dest.parent.mkdir(parents=True, exist_ok=True)
-            elif not dest.parent.is_dir():
-                #log.warning(f"{dest.parent} exists, and is not a directory")
-                raise Exception("{dest.parent} exists, and is not a directory")
+            doMove(f, dest)
+        dragFiles(dragfiles, f.parent, dest.parent)
 
-            if args.link:
-                f.link_to(dest)
-            else:
-                f.rename(dest)
     except NotAudioException as e:
         log.warning(e)
     except Exception as e:
@@ -202,11 +218,13 @@ def reorgDir(d):
                 log.warning(f"Caught exception processing {name}: {e}")
                 log.exception(e)
 
+
         if composers:
-            composerStr = makeComposerString(composers)
+            composerStr = pathlib.Path(args.classicaldir).joinpath(munge(makeComposerString(composers)))
+            print(composers, composerStr)
 
         for f in audio:
-            renameFile(f[0], f[1], performer=composerStr)
+            renameFile(f[0], f[1], dragfiles=args.drag, dirname=composerStr)
 
         for f in dirs:
             reorgDir(f)
@@ -269,7 +287,9 @@ for name in args.files:
             reorgDir(p)
         elif p.is_file():
             tags = getTags(p)
-            renameFile(p, tags)
+            renameFile(p, tags, dragfiles=args.drag)
+    except KeyboardInterrupt:
+        log.info("Aborting")
     except Exception as e:
         log.warning(f"Caught exception processing {name}: {e}")
         log.exception(e)
