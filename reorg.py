@@ -35,8 +35,7 @@ def processArgs():
     parser.add_argument('--albartist', '-a', dest='albartist', default=True,                                    help='Use album artist for default directory if available' + _def)
     parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                            help='"Artist" name for various artists collections' + _def)
     parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,  help='Use articles')
-    parser.add_argument('--classical', '-C', dest='classical', default='Classical',                             help='Use classical naming if the genre starts with this' + _def)
-    parser.add_argument('--classicaldir', '-D', dest='classicaldir', default='Classical',                       help='Store classical files in this subdirectory' + _def)
+    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming if the genre starts with this' + _def)
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                     help='Maximum length of file names' + _def)
     parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                         help='Cleanup empty directories and dragged files when done' + _def)
 
@@ -213,7 +212,7 @@ def reorgDir(d):
                     else:
                         tags = getTags(f)
                         audio.append((f, tags))
-                        if tags.get('genre', '').startswith(args.classical) and tags.get('composer'):
+                        if args.classical and tags.get('composer'):
                             composers.append(tags.get('composer'))
             except NotAudioException as e:
                 log.warning(e)
@@ -221,8 +220,8 @@ def reorgDir(d):
                 log.warning(f"Caught exception processing {name}: {e}")
                 log.exception(e)
 
-        if composers:
-            composerStr = pathlib.Path(args.classicaldir).joinpath(munge(makeComposerString(composers)))
+        if args.classical and composers:
+            composerStr = munge(makeComposerString(composers))
 
         for f in audio:
             renameFile(f[0], f[1], dragfiles=dragfiles, dirname=composerStr)
