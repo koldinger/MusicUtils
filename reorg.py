@@ -146,15 +146,15 @@ def makeName(f, tags, dirname = None):
     log.debug(f"FullName {f} -> {newFile}")
     return newFile
 
-def dragFiles(dragfiles, srcdir, destdir):
-    action = "Linking" if args.link else "Moving"
+def dragFiles(dragfiles, destdir):
+    action = "Linking" if args.link else "Dragging "
     if not args.rename:
         action = "[TESTING] " + action
     for f in dragfiles:
-        src = srcdir.joinpath(f)
-        dest = destdir.joinpath(f)
-        if src.exists() and not dest.exists():
-            doMove(src, dest)
+        dest = destdir.joinpath(f.name)
+        if f.exists() and not dest.exists():
+            log.info(f"{action} {f}\t==>  {dest}")
+            doMove(f, dest)
 
 def doMove(src, dest):
     if args.rename:
@@ -182,15 +182,14 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
             return
         log.info(f"{action} {f}\t==>  {dest}")
 
-        if args.rename:
-            doMove(f, dest)
-        dragFiles(dragfiles, f.parent, dest.parent)
+        doMove(f, dest)
+        dragFiles(dragfiles, dest.parent)
 
     except NotAudioException as e:
         log.warning(e)
     except Exception as e:
         log.warning(f"Caught exception {e} processing {f.name}")
-        log.execption(e)
+        log.exception(e)
 
 def reorgDir(d):
     try:
@@ -198,6 +197,7 @@ def reorgDir(d):
         dirs = []
         audio = []
         composers = []
+        dragfiles = []
         files = sorted(filter(lambda x: not x.name.startswith('.'), list(d.iterdir())))
 
         composerStr = None
@@ -208,23 +208,24 @@ def reorgDir(d):
                 if f.is_dir():
                     dirs.append(f)
                 elif f.is_file():
-                    tags = getTags(f)
-                    audio.append((f, tags))
-                    if tags.get('genre', '').startswith(args.classical) and tags.get('composer'):
-                        composers.append(tags.get('composer'))
+                    if f.name in args.drag:
+                        dragfiles.append(f)
+                    else:
+                        tags = getTags(f)
+                        audio.append((f, tags))
+                        if tags.get('genre', '').startswith(args.classical) and tags.get('composer'):
+                            composers.append(tags.get('composer'))
             except NotAudioException as e:
                 log.warning(e)
             except Exception as e:
                 log.warning(f"Caught exception processing {name}: {e}")
                 log.exception(e)
 
-
         if composers:
             composerStr = pathlib.Path(args.classicaldir).joinpath(munge(makeComposerString(composers)))
-            print(composers, composerStr)
 
         for f in audio:
-            renameFile(f[0], f[1], dragfiles=args.drag, dirname=composerStr)
+            renameFile(f[0], f[1], dragfiles=dragfiles, dirname=composerStr)
 
         for f in dirs:
             reorgDir(f)
@@ -275,8 +276,6 @@ else:
         'MPEG-4': args.base
     }
 
-log.info("Starting")
-
 for name in args.files:
     try:
         log.info(f"Running {name}")
@@ -287,7 +286,7 @@ for name in args.files:
             reorgDir(p)
         elif p.is_file():
             tags = getTags(p)
-            renameFile(p, tags, dragfiles=args.drag)
+            renameFile(p, tags)
     except KeyboardInterrupt:
         log.info("Aborting")
     except Exception as e:
