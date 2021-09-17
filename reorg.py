@@ -51,10 +51,12 @@ def munge(name):
         name = unicodedata.normalize('NFKC', name)
     if args.ascii:
         name = unidecode.unidecode(name)
-    name = re.sub('[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;]', '', name)
+    name = re.sub('[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
     name = re.sub('\s', '_', name)
     name = re.sub('_+', '_', name)
-    name.strip('_')
+    if not args.useArticle:
+        name = re.sub("^(The|A|An)\s+", "", name)
+    name = name.strip('_')
     return name
 
 
@@ -66,28 +68,40 @@ def noSlash(tag):
 def makeFName(f, tags):
     name = ""
     diskno = None
-    if tags.get('part_position'):
-        diskno = tags.get('part_position')
-    elif tags.get('set'):
-        diskno = tags.get('set')
+    if 'part_position' in tags:
+        diskno = str(tags.get('part_position'))
+    elif 'set' in tags:
+        diskno = str(tags.get('set'))
+    elif 'part' in tags:
+        diskno = str(tags.get('part'))
 
     title = tags.get('title')
     title = title if title else tags.get('track_name', 'Unknown')
-    if tags.get('title__more'):
+    if 'title__more' in tags:
         title = title + " " + tags.get('title__more')
-    elif tags.get('track_name__more'):
+    elif 'track_name__more' in tags:
         title = title + " " + tags.get('track_name__more')
-    #elif tags.get('part'):
+    #elif 'part' in tags:
     #    title = title + " " + str(tags.get('part'))
 
-    if diskno:
-        trk = "{0}-{1}".format(noSlash(diskno), noSlash(tags.get('track_name_position', '0')).zfill(2))
+    if 'track_name_position' in tags:
+        track = noSlash(str(tags['track_name_position']))
+    elif 'track' in tags:
+        track = noSlash(str(tags['track']))
     else:
-        trk = noSlash(tags.get('track_name_position', '00')).zfill(2) 
+        track = '0'
+
+
+    if diskno:
+        trk = "{0}-{1}".format(noSlash(diskno), track.zfill(2))
+    else:
+        trk = noSlash(track).zfill(2) 
 
     #name = name + '.' + tags.get('track_name')
 
-    m = max(args.maxlength - len(f.suffix) - len(trk), 5)
+    # Don't take the suffix length into account, confuses things when suffixes are different lengths
+    # .flac vs .mp3 for instance.
+    m = max(args.maxlength - len(trk), 5)
 
     name = "{0}.{1}{2}".format(trk, munge(title)[0:m].strip(), f.suffix)
     log.debug(f"Name {f.name} -> {name}")
@@ -111,7 +125,8 @@ def makeDName(f, tags, dirname=None):
         base = pathlib.Path(bases[tags['format']])
 
         if dirname is None:
-            if tags.get('compilation') == 'Yes':
+            compilation = str(tags.get('compilation', 'No'))
+            if compilation.lower() == 'yes' or compilation == '1':
                 dirname = args.various
             elif args.albartist and tags.get('album_performer'):
                 dirname = tags.get('album_performer')
@@ -177,7 +192,8 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
     dest = makeName(f, tags, dirname)
     try:
         if dest.exists():
-            log.warning(f"{dest} exists, skipping")
+            if not f.samefile(dest):
+                log.warning(f"{dest} exists, skipping ({f})")
             return
         log.info(f"{action} {f}\t==>  {dest}")
 
