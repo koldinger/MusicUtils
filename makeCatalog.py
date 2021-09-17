@@ -103,22 +103,8 @@ database = {}
 _lastArtist = None
 _lastAlbum  = None
 
-def printTrackInfo(tag, f, fmt):
-    albartist, artist = getArtist(tag)
-    album  = getAlbum(tag)
-    title  = getTrackTitle(tag)
-    frmt   = tag.get('format')
-    length = int(tag.get('duration', 0)) / 1000
-    genre  = tag.get('genre', 'Unknown')
-    track  = getTrackNumber(tag)
-    disk   = getDiskNumber(tag)
-
-    length = f"{int(length / 60)}:{int(length % 60):02}"
-
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": f, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk}
-
+def printTrackInfo(values, fmt):
     print(fmt.format(**values))
-
 
 def makeFormatSpec():
     fmt = ""
@@ -142,19 +128,34 @@ def printDatabase():
     for artist in sorted(database.keys()):
         for album in sorted(database[artist].keys()):
             for track in sorted(database[artist][album].keys()):
-                (f, t) = database[artist][album][track]
-                printTrackInfo(t, f, fmt)
+                t = database[artist][album][track]
+                printTrackInfo(t, fmt)
+
+def makeInfo(tag, f, base):
+    albartist, artist = getArtist(tag)
+    album  = getAlbum(tag)
+    title  = getTrackTitle(tag)
+    frmt   = tag.get('format')
+    length = int(tag.get('duration', 0)) / 1000
+    genre  = tag.get('genre', 'Unknown')
+    track  = getTrackNumber(tag)
+    disk   = getDiskNumber(tag)
+
+    length = f"{int(length / 60)}:{int(length % 60):02}"
+
+    path = f.relative_to(base)
+
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": f, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk}
+    return values
 
 def processFile(f, base):
     try:
         tag = getTags(f)
-        albArtist, artist = getArtist(tag)
-        album = getAlbum(tag)
-        title = getTrackTitle(tag)
+        info = makeInfo(tag, f, base)
 
-        albums = database.setdefault(albArtist, {})
-        tracks = albums.setdefault(album, {})
-        tracks[title] = (f.relative_to(base), tag)
+        albums = database.setdefault(info['albumartist'], {})
+        tracks = albums.setdefault(info['album'], {})
+        tracks[info['title']] = info
     except NotAudioException:
         log.warning(f"{f} is not an audio file")
 
