@@ -26,8 +26,8 @@ def parseArgs():
     parser = argparse.ArgumentParser("Generate a catalog of music files")
     parser.add_argument('--level', '-l', dest='level', choices=['artist', 'album', 'track'], default='track', help="Level of reporting")
     parser.add_argument('--fields', '-f', dest='fields', nargs='+', help='Fields to print',
-                         choices=['title', 'artist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
-                         default=['artist', 'album', 'title', 'path'])
+                         choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
+                         default=['albumartist', 'album', 'title', 'path'])
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help="Increase verbosity.  May be repeated")
     #parser.add_argument('--test', '-t', metavar="(-100 to 100)", choices=range(-100, 100), help="Test")
     parser.add_argument('dirs', nargs="+", help='Base directories to catalog')
@@ -36,18 +36,21 @@ def parseArgs():
 
 interestingTags = ['format', 'set', 'part_position', 'track_name_position', 'track_name', 'album', 'performer']
 
-
-
 _maxlens = {}
 def setMaxLen(name, value):
-    _maxlens[name] = max(_maxlens.get(name, 0), len(value))
+    _maxlens[name] = min(max(_maxlens.get(name, 0), len(value)), 80)
+
+def noSlash(tag):
+    if tag.find('/') != -1:
+        tag = tag[0:tag.find('/')]
+    return tag
 
 def getArtist(tags):
     artist = tags.get('performer', 'Unknown')
     albArtist = tags.get('album_performer', artist)
     #compilation = str(tag.get('compilation', 'No'))
     setMaxLen('artist', artist)
-    setMaxLen('albartist', albArtist)
+    setMaxLen('albumartist', albArtist)
 
     return albArtist, artist
 
@@ -60,6 +63,26 @@ def getTrackTitle(tags):
     title =  tags.get('title', 'Unknown')
     setMaxLen('title', title)
     return title
+
+def getTrackNumber(tags):
+    if 'track_name_position' in tags:
+        track = noSlash(str(tags['track_name_position']))
+    elif 'track' in tags:
+        track = noSlash(str(tags['track']))
+    else:
+        track = '0'
+    return track
+
+def getDiskNumber(tags):
+    if 'part_position' in tags:
+        diskno = str(tags.get('part_position'))
+    elif 'set' in tags:
+        diskno = str(tags.get('set'))
+    elif 'part' in tags:
+        diskno = str(tags.get('part'))
+    else:
+        diskno = ""
+    return diskno
 
 def getTags(f):
     info = MediaInfo.parse(f.absolute())
@@ -81,16 +104,18 @@ _lastArtist = None
 _lastAlbum  = None
 
 def printTrackInfo(tag, f, fmt):
-    artist = getArtist(tag)[1]
+    albartist, artist = getArtist(tag)
     album  = getAlbum(tag)
     title  = getTrackTitle(tag)
     frmt   = tag.get('format')
-    length = tag.get('duration') / 1000
+    length = int(tag.get('duration', 0)) / 1000
+    genre  = tag.get('genre', 'Unknown')
+    track  = getTrackNumber(tag)
+    disk   = getDiskNumber(tag)
 
     length = f"{int(length / 60)}:{int(length % 60):02}"
 
-
-    values = {"artist": artist, "album": album, "title": title, "path": f, "length": length, 'format': frmt}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": f, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk}
 
     print(fmt.format(**values))
 
@@ -104,10 +129,12 @@ def makeFormatSpec():
             fieldFmt = "{path}"
         elif i == 'length':
             fieldFmt = "{length:>6}"
+        elif i == 'disk' or i == 'track':
+            fieldFmt = f"{{{i}:>3}}"
         else:
             fieldFmt = f"{{{i}:{_maxlens.get(i, 20)}}}"
         fmt = fmt + fieldFmt
-    print(fmt)
+    #print(fmt)
     return fmt
 
 def printDatabase():
@@ -152,7 +179,7 @@ def main():
     global args
     args = parseArgs()
     initLogging()
-    print(args.fields)
+    #print(args.fields)
 
     for d in args.dirs:
         dd = pathlib.Path(d)
