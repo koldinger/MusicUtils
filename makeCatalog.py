@@ -5,6 +5,8 @@ import logging
 import json
 import pathlib
 import pprint
+import unicodedata
+import os.path
 
 from pymediainfo import MediaInfo
 
@@ -28,6 +30,8 @@ def parseArgs():
     parser.add_argument('--fields', '-f', dest='fields', nargs='+', help='Fields to print',
                          choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
                          default=['albumartist', 'album', 'title', 'path'])
+    parser.add_argument('--fullpath', '-F', dest='fullpath', default=False, action='store_true', help='Print full paths for files')
+    parser.add_argument('--base', '-b', dest='base', default=None, help='Use as base for relative paths')
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help="Increase verbosity.  May be repeated")
     #parser.add_argument('--test', '-t', metavar="(-100 to 100)", choices=range(-100, 100), help="Test")
     parser.add_argument('dirs', nargs="+", help='Base directories to catalog')
@@ -45,9 +49,12 @@ def noSlash(tag):
         tag = tag[0:tag.find('/')]
     return tag
 
+def clean(string):
+    return unicodedata.normalize('NFKC', string).strip()
+
 def getArtist(tags):
-    artist = tags.get('performer', 'Unknown')
-    albArtist = tags.get('album_performer', artist)
+    artist = clean(tags.get('performer', 'Unknown'))
+    albArtist = clean(tags.get('album_performer', artist))
     #compilation = str(tag.get('compilation', 'No'))
     setMaxLen('artist', artist)
     setMaxLen('albumartist', albArtist)
@@ -55,12 +62,12 @@ def getArtist(tags):
     return albArtist, artist
 
 def getAlbum(tags):
-    album =  tags.get('album', 'Unknown')
+    album =  clean(tags.get('album', 'Unknown'))
     setMaxLen('album', album)
     return album
 
 def getTrackTitle(tags):
-    title =  tags.get('title', 'Unknown')
+    title =  clean(tags.get('title', 'Unknown'))
     setMaxLen('title', title)
     return title
 
@@ -77,12 +84,15 @@ def getDiskNumber(tags):
     if 'part_position' in tags:
         diskno = str(tags.get('part_position'))
     elif 'set' in tags:
-        diskno = str(tags.get('set'))
+        diskno = noSlash(str(tags.get('set')))
     elif 'part' in tags:
-        diskno = str(tags.get('part'))
+        diskno = noSlash(str(tags.get('part')))
     else:
         diskno = ""
     return diskno
+
+def getSize(tag):
+    return tag['other_file_size'][0]
 
 def getTags(f):
     info = MediaInfo.parse(f.absolute())
@@ -116,22 +126,34 @@ def makeFormatSpec():
         elif i == 'length':
             fieldFmt = "{length:>6}"
         elif i == 'disk' or i == 'track':
-            fieldFmt = f"{{{i}:>3}}"
+            fieldFmt = f"{{{i}:>5}}"
         else:
             fieldFmt = f"{{{i}:{_maxlens.get(i, 20)}}}"
         fmt = fmt + fieldFmt
     #print(fmt)
     return fmt
 
+def makeHeaderLines(fmt):
+    values = {}
+    for i in args.fields:
+        values[i] = i.title()
+    header = fmt.format(**values)
+    return header
+
+
 def printDatabase():
     fmt = makeFormatSpec()
+    header = makeHeaderLines(fmt)
+    print(header)
     for artist in sorted(database.keys()):
         for album in sorted(database[artist].keys()):
-            for track in sorted(database[artist][album].keys()):
-                t = database[artist][album][track]
+            tracks = database[artist][album]
+            for track in sorted(tracks):
+                t = tracks[track]
                 printTrackInfo(t, fmt)
 
 def makeInfo(tag, f, base):
+    #choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
     albartist, artist = getArtist(tag)
     album  = getAlbum(tag)
     title  = getTrackTitle(tag)
@@ -140,12 +162,13 @@ def makeInfo(tag, f, base):
     genre  = tag.get('genre', 'Unknown')
     track  = getTrackNumber(tag)
     disk   = getDiskNumber(tag)
+    size   = getSize(tag)
 
     length = f"{int(length / 60)}:{int(length % 60):02}"
 
-    path = f.relative_to(base)
+    path = f.absolute() if args.fullpath else f.absolute().relative_to(base)
 
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": f, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size}
     return values
 
 def processFile(f, base):
@@ -155,7 +178,7 @@ def processFile(f, base):
 
         albums = database.setdefault(info['albumartist'], {})
         tracks = albums.setdefault(info['album'], {})
-        tracks[info['title']] = info
+        tracks[(info['disk'].zfill(2), info['track'].zfill(2))] = info
     except NotAudioException:
         log.warning(f"{f} is not an audio file")
 
@@ -182,10 +205,17 @@ def main():
     initLogging()
     #print(args.fields)
 
-    for d in args.dirs:
-        dd = pathlib.Path(d)
-        log.info(f"Starting {dd}")
-        processDirTree(dd, dd)
+    dirs = [pathlib.Path(x) for x in args.dirs]
+    if args.base:
+        base = pathlib.Path(args.base)
+        if not base.is_dir():
+            raise Exception(f"{base} is not a directory")
+    else:
+        base = pathlib.Path(os.path.commonpath([x.absolute() for x in dirs]))
+
+    for d in dirs:
+        log.info(f"Starting {d}")
+        processDirTree(d, base)
 
     printDatabase()
     
