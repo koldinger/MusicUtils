@@ -26,9 +26,15 @@ def processArgs():
     parser.add_argument('--flacbase', '-f', dest='flacbase', default='/srv/music/FLAC',                         help='Base dir for FLAC files, if --split' + _def)
     parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                         help='Base dir for MP3 files, if --split' + _def)
     parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                         help='Base dir for MP4 files, if --split' + _def)
-    parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
-    parser.add_argument('--rename', dest='rename', default=False, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only')
+    #parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
+
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument('--move', dest='link', default=True, action='store_false',      help='Move files, do not link')
+    action.add_argument('--link', dest='link', default=True, action='store_true',       help='Hard link instead of moving')
+
+    parser.add_argument('--test', dest='test', default=True, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only')
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                          help='List of files to copy along with the music files' + _def)
+
     parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,    help='Convert to ASCII characters')
     parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings')
     parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,    help='Rename files inplace')
@@ -39,9 +45,10 @@ def processArgs():
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                     help='Maximum length of file names' + _def)
     parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                         help='Cleanup empty directories and dragged files when done' + _def)
 
+
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                           help='Increase the verbosity')
 
-    parser.add_argument('files', nargs='+', help='List of files/directories to reorganize')
+    parser.add_argument('files', nargs='+', default=['.'], help='List of files/directories to reorganize')
 
     args = parser.parse_args()
     return args
@@ -162,7 +169,7 @@ def makeName(f, tags, dirname = None):
 
 def dragFiles(dragfiles, destdir):
     action = "Linking" if args.link else "Dragging "
-    if not args.rename:
+    if args.test:
         action = "[TESTING] " + action
     for f in dragfiles:
         dest = destdir.joinpath(f.name)
@@ -171,7 +178,7 @@ def dragFiles(dragfiles, destdir):
             doMove(f, dest)
 
 def doMove(src, dest):
-    if args.rename:
+    if not args.test:
         if not dest.parent.exists():
             log.debug(f"Creating {dest.parent}")
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -186,8 +193,8 @@ def doMove(src, dest):
 
 def renameFile(f, tags, dragfiles=[], dirname=None):
     action = "Linking" if args.link else "Moving"
-    if not args.rename:
-        action = "[TESTING] " + action
+    if args.test:
+        action = "[t] " + action
     log.debug(f"Renaming {f.name}")
     dest = makeName(f, tags, dirname)
     try:
