@@ -7,6 +7,7 @@ import pathlib
 import pprint
 import unicodedata
 import os.path
+from functools import reduce
 
 from pymediainfo import MediaInfo
 
@@ -28,8 +29,8 @@ def parseArgs():
     parser = argparse.ArgumentParser("Generate a catalog of music files")
     parser.add_argument('--level', '-l', dest='level', choices=['artist', 'album', 'track'], default='track', help="Level of reporting")
     parser.add_argument('--fields', '-f', dest='fields', nargs='+', help='Fields to print',
-                         choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
-                         default=['albumartist', 'album', 'title', 'path'])
+                         choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'disks', 'tracks', 'albums'],
+                         default=['albumartist', 'album', 'track', 'title', 'path'])
     parser.add_argument('--fullpath', '-F', dest='fullpath', default=False, action='store_true', help='Print full paths for files')
     parser.add_argument('--base', '-b', dest='base', default=None, help='Use as base for relative paths')
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help="Increase verbosity.  May be repeated")
@@ -92,7 +93,7 @@ def getDiskNumber(tags):
     return diskno
 
 def getSize(tag):
-    return tag['other_file_size'][0]
+    return tag['file_size'], tag['other_file_size'][0]
 
 def getTags(f):
     info = MediaInfo.parse(f.absolute())
@@ -123,8 +124,8 @@ def makeFormatSpec():
             fmt = fmt + " | "
         if i == 'path':
             fieldFmt = "{path}"
-        elif i == 'length':
-            fieldFmt = "{length:>6}"
+        elif i == 'duration':
+            fieldFmt = "{duration:>8}"
         elif i == 'disk' or i == 'track':
             fieldFmt = f"{{{i}:>5}}"
         else:
@@ -140,36 +141,84 @@ def makeHeaderLines(fmt):
     header = fmt.format(**values)
     return header
 
+def printAlbumInfo(artist, album, tracks, fmt):
+    (disks, tracks, duration, size) = getAlbumStats(tracks)
+    duration = milliToTime(duration)
+    size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
+    values = {"artist": artist, "albumartist": artist, "album": album, "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'tracks': tracks, 'disks': disks, 'albums': '', 'size': size}
+    printTrackInfo(values, fmt)
+
+
+def printArtistInfo(artist, albums, fmt):
+    albumInfo = [getAlbumStats(albums[x]) for x in albums]
+    (disks, tracks, duration, size) = tuple(map(sum, zip(*albumInfo)))
+    albums = len(albumInfo)
+    duration = milliToTime(duration)
+    size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
+    values = {"artist": artist, "albumartist": artist, "album": str(albums), "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'disk': '', 'tracks': tracks, 'disks': disks, 'albums': albums, 'size': size}
+    printTrackInfo(values, fmt)
 
 def printDatabase():
     fmt = makeFormatSpec()
     header = makeHeaderLines(fmt)
     print(header)
     for artist in sorted(database.keys()):
-        for album in sorted(database[artist].keys()):
-            tracks = database[artist][album]
-            for track in sorted(tracks):
-                t = tracks[track]
-                printTrackInfo(t, fmt)
+        albums = database[artist]
+        if args.level == 'artist':
+            printArtistInfo(artist, albums, fmt)
+        else:
+            for album in sorted(albums.keys()):
+                tracks = albums[album]
+                if args.level == 'album':
+                    printAlbumInfo(artist, album, tracks, fmt)
+                else:
+                    for track in sorted(tracks):
+                        t = tracks[track].copy()
+                        t['duration'] = milliToTime(t['duration'])
+                        printTrackInfo(t, fmt)
+
+def milliToTime(length):
+    length = length / 1000
+    length = f"{int(length / 60)}:{int(length % 60):02}"
+    return length
+
+def fmtSize(num, base=1024, formats = ['bytes','KB','MB','GB', 'TB', 'PB']):
+    fmt = "%d %s"
+    if num is None:
+        return 'None'
+    num = float(num)
+    for x in formats:
+        #if num < base and num > -base:
+        if -base < num < base:
+            return (fmt % (num, x)).strip()
+        num /= float(base)
+        fmt = "%3.1f %s"
+    return (fmt % (num, 'EB')).strip()
 
 def makeInfo(tag, f, base):
-    #choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'length', 'size', 'genre', 'format'],
+    #choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format'],
     albartist, artist = getArtist(tag)
     album  = getAlbum(tag)
     title  = getTrackTitle(tag)
     frmt   = tag.get('format')
-    length = int(tag.get('duration', 0)) / 1000
+    duration = int(tag.get('duration', 0))
     genre  = tag.get('genre', 'Unknown')
     track  = getTrackNumber(tag)
     disk   = getDiskNumber(tag)
-    size   = getSize(tag)
-
-    length = f"{int(length / 60)}:{int(length % 60):02}"
+    isize, size = getSize(tag)
 
     path = f.absolute() if args.fullpath else f.absolute().relative_to(base)
 
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "length": length, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize}
     return values
+
+def getAlbumStats(album):
+    tracks = len(album)
+    disks = len(set([album[x]['disk'] for x in album]))
+    duration = sum([album[x]['duration'] for x in album])
+    size = sum([album[x]['isize'] for x in album])
+    #print(disks, tracks, duration)
+    return (disks, tracks, duration, size)
 
 def processFile(f, base):
     try:
