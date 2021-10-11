@@ -8,6 +8,7 @@ import pprint
 import pathlib
 import re
 import unicodedata
+import shutil
 
 import colorlog
 import unidecode
@@ -15,6 +16,11 @@ from pymediainfo import MediaInfo
 
 class NotAudioException(Exception):
     pass
+
+ACTION_LINK=1
+ACTION_MOVE=2
+ACTION_COPY=3
+ACTION_SYMLINK=4
 
 def processArgs():
     _def = ' (default: %(default)s)'
@@ -29,8 +35,10 @@ def processArgs():
     #parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
 
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--move', dest='link', default=True, action='store_false',      help='Move files, do not link')
-    action.add_argument('--link', dest='link', default=True, action='store_true',       help='Hard link instead of moving')
+    action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,        help='Move (rename) the files')
+    action.add_argument('--link', dest='action', action='store_const', const=ACTION_LINK,                             help='Hard link the files')
+    action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,                             help='Copy the files')
+    action.add_argument('--slink', dest='action', action='store_const', const=ACTION_SYMLINK,                         help='Symbolic link the files')
 
     parser.add_argument('--test', dest='test', default=True, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only')
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                          help='List of files to copy along with the music files' + _def)
@@ -168,9 +176,7 @@ def makeName(f, tags, dirname = None):
     return newFile
 
 def dragFiles(dragfiles, destdir):
-    action = "Linking" if args.link else "Dragging "
-    if args.test:
-        action = "[TESTING] " + action
+    action = actionName()
     for f in dragfiles:
         dest = destdir.joinpath(f.name)
         if f.exists() and not dest.exists():
@@ -186,16 +192,32 @@ def doMove(src, dest):
             #log.warning(f"{dest.parent} exists, and is not a directory")
             raise Exception("{dest.parent} exists, and is not a directory")
 
-        if args.link:
+        if args.action == ACTION_LINK:
             src.link_to(dest)
-        else:
+        elif args.action == ACTION_MOVE:
             src.rename(dest)
+        elif args.cation == ACTION_COPY:
+            shutil.copy2(src, dest)
+        elif args.action == ACTION_SYMLINK:
+            dest.symlink_to(src)
+
+
+def actionName():
+    if args.action == ACTION_LINK:
+        name = "Linking"
+    elif args.action == ACTION_MOVE:
+        name = "Moving"
+    elif args.cation == ACTION_COPY:
+        name = "Copying"
+    elif args.action == ACTION_SYMLINK:
+        name = "SymLinking"
+    if args.test:
+        name = "[-] " + name
+    return name
+
 
 def renameFile(f, tags, dragfiles=[], dirname=None):
-    action = "Linking" if args.link else "Moving"
-    if args.test:
-        action = "[t] " + action
-    log.debug(f"Renaming {f.name}")
+    action = actionName()
     dest = makeName(f, tags, dirname)
     try:
         if dest.exists():
