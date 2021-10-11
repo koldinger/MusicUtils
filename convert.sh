@@ -9,16 +9,26 @@ export base=$1
 export output=$2
 export suffix=$3
 
+#export hasArt="$HOME/dev/MusicUtils/hasArt.py"
+
 #for i in $(find $base -name \*.flac); do
 #for i in $(find $base -name \*.flac); do
 
 IFS=$'\n'
 
 doConvert() {
-    #echo "1  " $1
     i=$1
     indir=$(dirname "$i")
-    cover="$indir"/cover.jpg
+
+    covers=(cover.jpg Folder.jpg folder.jpg AlbumArtSmall.jpg)
+
+    for j in "${covers[@]}"; do
+        x="$indir"/"$j"
+        if [ -e "$x" ]; then
+            cover=$x
+            break
+        fi
+    done
 
     name=$(basename -s $suffix "$i")
 
@@ -31,15 +41,19 @@ doConvert() {
         echo "$name" "------" "$outfile"
         mkdir -p "$outdir"
         ffmpeg -i "$i" -n -loglevel 24 -c:a aac -b:a 128k -vcodec copy "$outfile"
-        if [ -e "$cover" ]; then
+    #else
+    #    echo "Skipping $i"
+    fi
+
+    if [ -e "$cover" ]; then
+        art=`/srv/home/kolding/dev/MusicUtils/hasArt.py "$outfile"`
+        if [ $art == "No" ]; then
             temp=$(mktemp)
-            echo "Adding cover art to $outfile $temp"
+            echo "Adding cover art to $outfile $cover"
             convert "$cover" -resize "300x>" $temp
             mp4art -q --add "$temp" "$outfile"
             rm -f "$temp"
         fi
-    #else
-    #    echo "Skipping $i"
     fi
 }
 
