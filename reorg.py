@@ -27,34 +27,33 @@ def processArgs():
 
     parser = argparse.ArgumentParser(description="Reorganize music files", add_help=True)
 
-    parser.add_argument('--base', '-b', dest='base', default='.',                                               help='Base destination directory' + _def)
-    parser.add_argument('--split', '-s', dest='split', default=False,                                           help='Split by type' + _def)
-    parser.add_argument('--flacbase', '-f', dest='flacbase', default='/srv/music/FLAC',                         help='Base dir for FLAC files, if --split' + _def)
-    parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                         help='Base dir for MP3 files, if --split' + _def)
-    parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                         help='Base dir for MP4 files, if --split' + _def)
+    parser.add_argument('--base', '-b', dest='base', default='.',                                                   help='Base destination directory' + _def)
+    parser.add_argument('--split', '-s', dest='split', default=False, action=argparse.BooleanOptionalAction,        help='Split by type' + _def)
+    parser.add_argument('--flacbase', '-f', dest='flacbase', default='/srv/music/FLAC',                             help='Base dir for FLAC files, if --split' + _def)
+    parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                             help='Base dir for MP3 files, if --split' + _def)
+    parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                             help='Base dir for MP4 files, if --split' + _def)
     #parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
 
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,        help='Move (rename) the files')
-    action.add_argument('--link', dest='action', action='store_const', const=ACTION_LINK,                             help='Hard link the files')
-    action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,                             help='Copy the files')
-    action.add_argument('--slink', dest='action', action='store_const', const=ACTION_SYMLINK,                         help='Symbolic link the files')
+    action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,      help='Move (rename) the files')
+    action.add_argument('--link', dest='action', action='store_const', const=ACTION_LINK,                           help='Hard link the files')
+    action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,                           help='Copy the files')
+    action.add_argument('--slink', dest='action', action='store_const', const=ACTION_SYMLINK,                       help='Symbolic link the files')
 
-    parser.add_argument('--test', dest='test', default=True, action=argparse.BooleanOptionalAction,        help='Rename files.  If false, only')
-    parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                          help='List of files to copy along with the music files' + _def)
+    parser.add_argument('--test', dest='test', default=False, action=argparse.BooleanOptionalAction,                help='Rename files.  If false, only')
+    parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                              help='List of files to copy along with the music files' + _def)
 
-    parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,    help='Convert to ASCII characters')
+    parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,        help='Convert to ASCII characters')
     parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings')
     parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,    help='Rename files inplace')
-    parser.add_argument('--albartist', '-a', dest='albartist', default=True,                                    help='Use album artist for default directory if available' + _def)
-    parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                            help='"Artist" name for various artists collections' + _def)
-    parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,  help='Use articles')
-    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming if the genre starts with this' + _def)
-    parser.add_argument('--length', dest='maxlength', default=75, type=int,                                     help='Maximum length of file names' + _def)
-    parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                         help='Cleanup empty directories and dragged files when done' + _def)
+    parser.add_argument('--albartist', '-a', dest='albartist', default=True, action=argparse.BooleanOptionalAction, help='Use album artist for default directory if available' + _def)
+    parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                                help='"Artist" name for various artists collections' + _def)
+    parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,      help='Use articles')
+    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming if the genre starts with this')
+    parser.add_argument('--length', dest='maxlength', default=75, type=int,                                         help='Maximum length of file names' + _def)
+    parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                             help='Cleanup empty directories and dragged files when done' + _def)
 
-
-    parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                           help='Increase the verbosity')
+    parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                               help='Increase the verbosity')
 
     parser.add_argument('files', nargs='+', default=['.'], help='List of files/directories to reorganize')
 
@@ -132,6 +131,14 @@ def makeComposerString(composers):
 
     return string
 
+def getArtist(tags):
+    if 'artist' in tags:
+        artist = tags.get('artist')
+    elif 'artists' in tags:
+        artist = tags.get('artists')
+    else:
+        artist = tags.get('performer', 'Unknown')
+    return artist
 
 def makeDName(f, tags, dirname=None):
     if args.inplace:
@@ -146,7 +153,7 @@ def makeDName(f, tags, dirname=None):
             elif args.albartist and tags.get('album_performer'):
                 dirname = tags.get('album_performer')
             else:
-                dirname = tags.get('performer', 'Unknown')
+                dirname = getArtist(tags)
 
         base = base.joinpath(munge(dirname), munge(tags.get('album', 'Unknown')))
 
@@ -235,6 +242,12 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
         log.warning(f"Caught exception {e} processing {f.name}")
         log.exception(e)
 
+def isDraggable(f):
+    for pat in args.drag:
+        if f.match(pat):
+            return True
+    return False
+
 def reorgDir(d):
     try:
         log.info(f"Processing Directory {d}")
@@ -252,7 +265,7 @@ def reorgDir(d):
                 if f.is_dir():
                     dirs.append(f)
                 elif f.is_file():
-                    if f.name in args.drag:
+                    if isDraggable(f):
                         dragfiles.append(f)
                     else:
                         tags = getTags(f)
@@ -292,7 +305,7 @@ def initLogging():
     formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s', log_colors=colors)
     handler.setFormatter(formatter)
 
-    levels = [logging.ERROR, logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, args.verbose)]  # capped to number of levels
 
     logger = colorlog.getLogger('reorg')
