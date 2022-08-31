@@ -58,19 +58,22 @@ foreach $file (@ARGV)
 {
     my $result = 0;
 
+    next unless -e $file;
+
     if ($preserveTS) {
-	my @stats = stat($file);
-	$atime = $stats[8];
-	$mtime = $stats[9];
+        my @stats = stat($file);
+        $atime = $stats[8];
+        $mtime = $stats[9];
     }
 
     $result = setTagsMP3($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.mp3$/);;
     $result = setTagsFLAC($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.flac$/);
+    $result = setTagsMP4($file, $trackNumber, $cddbID, $cddb) if ($file =~ /.mp4/ || $file =~ /.aac/ || $file =~ /.m4a/);
     if ($result ne 0)
     {
-	chomp $result;
-	print $result, "\n";
-	$numFailures++;
+        chomp $result;
+        print $result, "\n";
+        $numFailures++;
     }
 
     utime $atime, $mtime, $file if ($preserveTS);
@@ -92,18 +95,18 @@ sub setTagsFLAC {
     ## If no CDDB file is specified, let's get one.
     if (!defined $cddb) {
     	if (!defined $discid) {
-	    return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $tags->{"CDDB"});
-	    # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
-	    ($discid) = split/,/, $tags->{"CDDB"};
-	}
-	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
+            return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $tags->{"CDDB"});
+            # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+            ($discid) = split/,/, $tags->{"CDDB"};
+        }
+        $cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
     }
 
 
     if (!defined $track)
     {
-	$track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
-	$track =~ s/\/.*$//;
+        $track = $tags->{"TRACKNUMBER"} || return "Could not get track in $file.  Must set on command line\n";
+        $track =~ s/\/.*$//;
     }
 
     $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
@@ -120,8 +123,54 @@ sub setTagsFLAC {
     $tags->{"COMPILATION"}	= 1 if ($cddb->artist ne $trackInfo->artist() || $cddb->artist eq "Various");
     $tags->{"SET"}		= $pos if (defined $pos);
     my $result = $flac->write();
-    return "Unable to write flac tag in $file.  Result: $result" if ($result);
+    #return "Unable to write flac tag in $file.  Result: $result" if ($result);
     0;
+}
+
+sub setTagsMP4 {
+    my ($file, $track, $discid, $cddb) = @_;
+    print "Setting tags in $file\n";
+
+    my $mp4 = MP4::File->new;
+
+    $mp4->Modify($file);
+
+    my $cddb 	= $globalCDDB;
+    my $discid 	= $cddbID;
+    my $track 	= $trackNumber;
+
+    ## If no CDDB file is specified, let's get one.
+    if (!defined $cddb) {
+    	if (!defined $discid) {
+            #return "No CDDB DISCID (no ID3v2 Tag) available in $file.  Must set on command line\n" unless (defined $id3v2);
+            #my ($txxx, $name) = $id3v2->get_frame("TXXX");
+            return "No CDDB DISCID (no TXXX CDDB frame) available in $file.  Must set on command line\n" unless (defined $txxx);
+            return "TXXX Frame is not CDDB: " . $txxx->{"Description"} if (!($txxx->{"Description"} eq "CDDB"));
+            # This is ugly.  Only grab the first id, as they could be ID,ID,ID,ID
+            ($discid) = split/,/, $txxx->{"Text"};
+        }
+        $cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
+    }
+
+    if (!defined $track) {
+        ($curr, $total) = $mp4->GetMetadataTrack() || return "Could not get track in $file.  Must set on command line\n";
+    }
+
+    $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
+
+    my ($title, $pos) = parseTitle($cddb->title());
+    $mp4->SetMetadataAlbum(Unicode::String::latin1($title)->utf8());
+    $mp4->SetMetadataArtist(Unicode::String::latin1($trackInfo->artist())->utf8());
+    $mp4->SetMetadataName(Unicode::String::latin1($trackInfo->title())->utf8());
+    $mp4->SetMetadataGenre(Unicode::String::latin1($cddb->genre())->utf8());
+    $mp4->SetMetadataYear($cddb->year());
+    $mp4->SetMetadataTrack($trackInfo->number(), $cdd->track_count());
+
+    #$mp4->SetMetadata(Unicode::String::latin1($trackInfo->artist())->utf8());
+
+    $mp4->SetMetadataCompilation(1) if ($cddb->artist ne $trackInfo->artist() || $cddb->artist eq "Various");
+
+    $mp4->Close;
 }
 
 sub setTagsMP3 {
@@ -151,9 +200,8 @@ sub setTagsMP3 {
 	$cddb = findCDDB($discid) || return "Could not find CDDB entry for $discid\n";
     }
 
-    if (!defined $track)
-    {
-	$track = $mp3->track() || return "Could not get track in $file.  Must set on command line\n";
+    if (!defined $track) {
+        $track = $mp3->track() || return "Could not get track in $file.  Must set on command line\n";
     }
 
     $trackInfo = findTrack($cddb, $track) || return "Could not find info for Disc $discid, Track $track\n";
@@ -217,8 +265,8 @@ sub trim {
 sub translate {
     my $string = shift;
     if ($utf8) {
-	$string = Unicode::String::utf8($string)->latin1();
-    } 
+        $string = Unicode::String::utf8($string)->latin1();
+    }
     $string;
 }
 
