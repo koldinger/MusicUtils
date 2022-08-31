@@ -6,7 +6,8 @@
 
 use MP3::Tag;
 use Audio::FLAC::Header;
-use Audio::M4P::QuickTime;
+#use Audio::M4P::QuickTime;
+use MP4::Info;
 use Getopt::Long;
 use Unicode::String;
 use Unicode::Normalize;
@@ -17,13 +18,15 @@ use String::Util qw(trim);
 use Cwd;
 use Memoize;
 
-foreach $i (qw(collectTagsMP3 collectTagsFlac)) {
+foreach $i (qw(collectTagsMP3 collectTagsMP4 collectTagsFlac)) {
     memoize($i)
 }
 
 # Set up options processing
 $mp3base        = "/srv/music/MP3/CD";
 $flacbase       = "/srv/music/FLAC";
+$mp4base        = "/srv/music/MP4";
+$base           = $m43base;
 $variousArtists = "VariousArtists";
 $classicalName  = "Classical";
 $noArtist       = "NoArtist";
@@ -48,7 +51,7 @@ $cddbName       = 0;
 
 $result = GetOptions(
              "utf8!"        =>  \$utf8,
-             "base=s"       =>  \$mp3base,
+             "base=s"       =>  \$base,
              "compilation"  =>  \$compilation,
              "classical"    =>  \$classical,
              "various=s"    =>  \$variousArtists,
@@ -60,8 +63,9 @@ $result = GetOptions(
              "RemoveDups!"  =>  \$removeDups,
              "flacbase=s"   =>  \$flacbase,
              "mp3base=s"    =>  \$mp3base,
+             "mp4base=s"    =>  \$mp4base,
              "dots!"        =>  \$dots,
-             'albartist'    =>  \$albumArtist,
+             'albartist!'   =>  \$albumArtist,
              "length=i"     =>  \$maxNameLen,
              "link!"        =>  \$link,
              #"normalize!"   =>  \$normalize,
@@ -77,7 +81,10 @@ if (!$result)
     print "Invalid options\n";
 }
 
-$flacbase = $mp3base unless ($split);
+$flacbase = $base unless ($split);
+$mp3base = $base unless ($split);
+$mp4base = $base unless ($split);
+
 if ($help || !$result) {
     usage();
     exit;
@@ -113,12 +120,16 @@ sub reorgDir {
     foreach my $path (sort @files) {
         next unless (-e $path);
         next if (-d $path);
-        if ($file =~ /\.mp3$/) {
-            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP3($file);
+        print $path, "\n";
+        if ($path =~ /\.mp3$/) {
+            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP3($path);
             $suffix = ".mp3"; $basedir = $mp3base;
-        } elsif ($file =~ /\.flac$/) {
-            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($file);
+        } elsif ($path =~ /\.flac$/) {
+            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($path);
             $suffix = ".flac"; $basedir = $flacbase;
+        } elsif ($path =~ /\.m4a$/) {
+            ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP4($path);
+            $suffix = ".m4a"; $basedir = $mp4base;
         }
         push @composers, $composer if (defined $composer && !contains($composer, @composers));
     }
@@ -153,6 +164,9 @@ sub renameFile {
     } elsif ($file =~ /\.flac$/) {
         ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsFlac($file);
         $suffix = ".flac"; $basedir = $flacbase;
+    } elsif ($file =~ /\.m4a$/) {
+        ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb) = collectTagsMP4($file);
+        $suffix = ".m4a"; $basedir = $mp4base;
     } else {
         #msg("$file: Not tagged type\n");
         return;
@@ -192,6 +206,33 @@ sub collectTagsFlac {
 
     $disc  = int ($tags->{"SET"}) if (defined $tags->{"SET"});
     $disc  = int ($tags->{"DISCNUMBER"}) if (defined $tags->{"DISCNUMBER"});
+
+    my $vaTag = 1 if (defined $tags->{"COMPILATION"});
+    return ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb);
+}
+
+sub collectTagsMP4 {
+    my $file = shift;
+    my $vaTag = 0;
+    my $disc = undef;
+    my $composer = undef;
+    my $mp4 = MP4::Info->new($file)  || return "Could not read tags from $file";
+    my $artist = latin1($mp4->{ART});
+    my $album  = latin1($mp4->{ALB}) || return "No album tag in $file";
+    my $title  = latin1($mp4->{NAM}) || return "No title tag in $file";
+    $title = $title . ", " . latin1($mp4->{GRP}) if (defined $mp4->{GRP});
+    my $genre  = latin1($tags->{GENRE});
+    my $track  = ($mp4->{TRACKNUM}) || return "No track tag in $file";;
+	my $cddb   = undef;
+    $composer = latin1($mp4->{WRT});
+
+    if ($albumArtist) {
+        $albArtist = $mp4->{"AART"};
+        $artist = latin1($albArtist) if defined($albArtist);
+    }
+
+    $disc  = int ($mp4->{"SET"}) if (defined $mp4->{"SET"});
+    $disc  = int ($mp4->{"DISCNUMBER"}) if (defined $mp4->{"DISCNUMBER"});
 
     my $vaTag = 1 if (defined $tags->{"COMPILATION"});
     return ($artist, $album, $title, $genre, $composer, $track, $disc, $vaTag, $cddb);
