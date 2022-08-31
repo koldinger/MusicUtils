@@ -65,7 +65,7 @@ sub countDeletable {
     foreach my $file (@_) {
         if (exists $delete{$file}) {
             $count++
-        } elsif ($macFiles && $file =~ /^\._.*/) {
+        } elsif ($macFiles && ($file =~ /^\._.*/)) {
             $count++
         }
     }
