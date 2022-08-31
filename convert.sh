@@ -41,17 +41,21 @@ doConvert() {
         echo "$name" "------" "$outfile"
         mkdir -p "$outdir"
         ffmpeg -i "$i" -n -loglevel 24 -c:a aac -b:a 128k -vcodec copy "$outfile"
-    #else
-    #    echo "Skipping $i"
+        touch -r "$i" "$outfile"
+    else
+        echo "Skipping $i"
     fi
 
     if [ -e "$cover" ]; then
-        art=`/srv/home/kolding/dev/MusicUtils/hasArt.py "$outfile"`
-        if [ $art == "No" ]; then
+        #art=`/srv/home/kolding/dev/MusicUtils/hasArt.py "$outfile"`
+        art=`mediainfo "$outfile" | grep -i -c "cover.*yes"`
+        if [ $art == "0" ]; then
             temp=$(mktemp)
             echo "Adding cover art to $outfile $cover"
             convert "$cover" -resize "300x>" $temp
+            touch -r "$outfile" "$temp"
             mp4art -q --add "$temp" "$outfile"
+            touch -r "$temp" "$outfile"
             rm -f "$temp"
         fi
     fi
