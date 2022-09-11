@@ -2,10 +2,13 @@
 
 import argparse
 import pathlib
-import music_tag
 import shutil
-import magic
 import sys
+import os
+
+import magic
+import music_tag
+
 from termcolor import colored, cprint
 
 def backupFile(path):
@@ -14,57 +17,66 @@ def backupFile(path):
     shutil.copy2(path, bupPath)
 
 def matchFiles(srcs, dsts):
-    return(list(zip(sorted(srcs), sorted(dsts))))
+    return list(zip(sorted(srcs), sorted(dsts)))
 
 def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
 
-def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, tags=None, skiptags=['artwork']):
+def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, skiptags=['artwork']):
     srcFiles = filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir())
     dstFiles = filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir())
 
     pairs = matchFiles(srcFiles, dstFiles)
 
     for files in pairs:
-        copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, tags=tags, skiptags=skiptags)
+        copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, skiptags=skiptags)
 
-def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, skiptags=['artwork']):
+def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, skiptags=['artwork']):
     print("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
     if backup and not dryrun:
         backupFile(toPath)
 
+    times = toPath.stat()
+
     frTags = music_tag.load_file(fromPath)
     toTags = music_tag.load_file(toPath)
+
 
     if not tags:
         tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
 
     for tag in tags:
-        if not tag in frTags:
-            continue
-        frValue = frTags[tag]
-        if tag in toTags:
-            toValue = toTags[tag]
-        else:
-            toValue = None
-
-        if frValue:
-            if toValue:
-                #print(tag, frValue, toValue, type(frValue), type(toValue))
-                if frValue.values == toValue.values:
-                    continue
-                if not replace:
-                    continue
-                print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
+        try:
+            if not tag in frTags:
+                continue
+            frValue = frTags[tag]
+            if tag in toTags:
+                toValue = toTags[tag]
             else:
-                print("\tAdding    {:25}: {}".format(tag, frValue))
-            toTags[tag] = frValue
-        elif delete and toValue:
-            print("\tDeleting  {:25}".format(tag))
-            del toTags[tag]
+                toValue = None
+
+            if frValue:
+                if toValue:
+                    #print(tag, frValue, toValue, type(frValue), type(toValue))
+                    if frValue.values == toValue.values:
+                        continue
+                    if not replace:
+                        continue
+                    print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
+                else:
+                    print("\tAdding    {:25}: {}".format(tag, frValue))
+                toTags[tag] = frValue
+            elif delete and toValue:
+                print("\tDeleting  {:25}".format(tag))
+                del toTags[tag]
+        except Exception as e:
+            print(colored("Error:", "red") + " Failed copying tags from {} to {}".format(colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
+            print(str(e))
 
     if not dryrun:
         toTags.save()
+        if preserve:
+            os.utime(toPath, times=(times.st_atime, times.st_mtime))
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories")
@@ -86,9 +98,9 @@ def main():
         print("Error: source and destination must both be files, or directories")
         sys.exit(1)
     if src.is_dir():
-        copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, replace=args.replace, delete=args.delete)
+        copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete)
     else:
-        copyTags(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, replace=args.replace, delete=args.delete)
+        copyTags(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete)
 
 if __name__ == '__main__':
     main()
