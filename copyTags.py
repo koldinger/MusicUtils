@@ -5,6 +5,8 @@ import pathlib
 import shutil
 import sys
 import os
+import pprint
+import traceback
 
 import magic
 import music_tag
@@ -22,17 +24,37 @@ def matchFiles(srcs, dsts):
 def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
 
-def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, skiptags=['artwork']):
+def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
+    print("Processing Tree: {} to {}".format(srcDir, dstDir))
+    copyDir(srcDir, dstDir, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
+    subDirs = list([x.name for x in srcDir.iterdir() if x.is_dir()])
+    for i in subDirs:
+        subSrc = pathlib.Path(srcDir, i)
+        subDst = pathlib.Path(dstDir, i)
+        if subDst.is_dir():
+            copyTree(subSrc, subDst, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
+        elif subDst.exists():
+            print("Dir {} is not a directory".format(colored(subDst, "red")))
+        else:
+            print("{} does not exist".format(colored(subDst, "red")))
+        
+
+def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
+    print("Processing directory {} into {}".format(colored(srcDir, "cyan"), colored(dstDir, "cyan")))
     srcFiles = filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir())
     dstFiles = filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir())
 
     pairs = matchFiles(srcFiles, dstFiles)
 
     for files in pairs:
-        copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, skiptags=skiptags)
+        copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
 
-def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, skiptags=['artwork']):
+def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=['artwork']):
     print("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
+    added = []
+    replaced = []
+    deleted = []
+
     if backup and not dryrun:
         backupFile(toPath)
 
@@ -41,6 +63,7 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
     frTags = music_tag.load_file(fromPath)
     toTags = music_tag.load_file(toPath)
 
+    changed = False
 
     if not tags:
         tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
@@ -50,41 +73,72 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
             if not tag in frTags:
                 continue
             frValue = frTags[tag]
-            if tag in toTags:
-                toValue = toTags[tag]
-            else:
+            # Get the "to" value
+            # if the value is unparseable, just ignore it
+            try:
+                if tag in toTags:
+                    toValue = toTags[tag]
+                else:
+                    toValue = None
+            except ValueError:
                 toValue = None
 
             if frValue:
                 if toValue:
                     #print(tag, frValue, toValue, type(frValue), type(toValue))
-                    if frValue.values == toValue.values:
+                    if tag == 'artwork':
+                        # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
+                        if frValue.first.data == toValue.first.data:
+                            continue
+                    elif frValue.values == toValue.values:
                         continue
                     if not replace:
                         continue
-                    print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
+                    replaced.append(tag)
+                    if not short:
+                        print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
                 else:
-                    print("\tAdding    {:25}: {}".format(tag, frValue))
+                    added.append(tag)
+                    if not short:
+                        print("\tAdding    {:25}: {}".format(tag, frValue))
                 toTags[tag] = frValue
+                changed = True
             elif delete and toValue:
-                print("\tDeleting  {:25}".format(tag))
+                deleted.append(tag)
+                if not short:
+                    print("\tDeleting  {:25}".format(tag))
                 del toTags[tag]
+                changed = True
         except Exception as e:
-            print(colored("Error:", "red") + " Failed copying tags from {} to {}".format(colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
+            print(colored("Error:", "red") + " Failed copying tag {} from {} to {}".format(colored(tag, "red"), colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
             print(str(e))
+            traceback.print_exc()
 
-    if not dryrun:
+    if short:
+        if added:
+            print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
+        if replaced:
+            print("{:9}: {}".format(colored("Replaced", "cyan"), pprint.pformat(replaced, compact=True, width=132)))
+        if deleted:
+            print("{:9}: {}".format(colored("Deleted", "cyan"), pprint.pformat(deleted, compact=True, width=132)))
+        if not (added or deleted or replaced):
+            print(colored("Nothing changed", "cyan"))
+        print()
+
+    if changed and not dryrun:
         toTags.save()
         if preserve:
             os.utime(toPath, times=(times.st_atime, times.st_mtime))
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories")
-    parser.add_argument("--backup", "-b", type=bool, nargs="?", default=False, const=True, help="Backup destination files before modification")
-    parser.add_argument("--replace", "-r", type=bool, nargs="?", default=False, const=True, help="Replace existing tags in destination")
-    parser.add_argument("--delete", "-d", type=bool, nargs="?", default=False, const=True, help="Delete tags from destination that don't exist in source")
-    parser.add_argument("--preserve", "-p", type=bool, nargs="?", default=False, const=True, help="Preserve timestamps")
-    parser.add_argument("--dryrun", "-n", type=bool, nargs="?", default=False, const=True, help="Don't save, dry run")
+    parser.add_argument("--backup", "-b",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Backup destination files before modification")
+    parser.add_argument("--replace", "-r",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Replace existing tags in destination")
+    parser.add_argument("--delete", "-d",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Delete tags from destination that don't exist in source")
+    parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
+    parser.add_argument("--short", "-s",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Short report")
+    parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
+    parser.add_argument("--recurse", "-R",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Recurse into subdirectories")
     parser.add_argument("--tags", type=str, nargs="+", default=None, help="Tags to copy")
     parser.add_argument("tagSource", type=pathlib.Path, nargs=1, help="tagSource")
     parser.add_argument("tagDest", type=pathlib.Path, nargs=1, help="tagDest")
@@ -98,9 +152,12 @@ def main():
         print("Error: source and destination must both be files, or directories")
         sys.exit(1)
     if src.is_dir():
-        copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete)
+        if args.recurse:
+            copyTree(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
+        else:
+            copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
     else:
-        copyTags(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete)
+        copyTags(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
 
 if __name__ == '__main__':
     main()
