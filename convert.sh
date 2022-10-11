@@ -42,8 +42,8 @@ doConvert() {
         mkdir -p "$outdir"
         ffmpeg -i "$i" -n -loglevel 24 -c:a aac -b:a 128k -vcodec copy "$outfile"
         touch -r "$i" "$outfile"
-    else
-        echo "Skipping $i"
+    #else
+        #echo "Skipping $i"
     fi
 
     if [ -e "$cover" ]; then
