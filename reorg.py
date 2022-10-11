@@ -9,6 +9,8 @@ import pathlib
 import re
 import unicodedata
 import shutil
+import operator
+import functools
 
 import colorlog
 import unidecode
@@ -29,10 +31,7 @@ def processArgs():
 
     parser.add_argument('--base', '-b', dest='base', default='.',                                                   help='Base destination directory' + _def)
     parser.add_argument('--split', '-s', dest='split', default=False, action=argparse.BooleanOptionalAction,        help='Split by type' + _def)
-    parser.add_argument('--flacbase', '-f', dest='flacbase', default='/srv/music/FLAC',                             help='Base dir for FLAC files, if --split' + _def)
-    parser.add_argument('--mp3base', '-3', dest='mp3base', default='/srv/music/MP3/CD',                             help='Base dir for MP3 files, if --split' + _def)
-    parser.add_argument('--mp4base', '-4', dest='mp4base', default='/srv/music/MP4/CD',                             help='Base dir for MP4 files, if --split' + _def)
-    #parser.add_argument('--link', '-l', dest='link', default=True, action=argparse.BooleanOptionalAction,       help='Hard link instead of moving')
+    parser.add_argument('--typebase', '-B', dest='bases', default=[], nargs='*',                                    help='Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3')
 
     action = parser.add_mutually_exclusive_group()
     action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,      help='Move (rename) the files')
@@ -40,7 +39,7 @@ def processArgs():
     action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,                           help='Copy the files')
     action.add_argument('--slink', dest='action', action='store_const', const=ACTION_SYMLINK,                       help='Symbolic link the files')
 
-    parser.add_argument('--test', dest='test', default=False, action=argparse.BooleanOptionalAction,                help='Rename files.  If false, only')
+    parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,       help='Rename files.  If false, only')
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],                              help='List of files to copy along with the music files' + _def)
 
     parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,        help='Convert to ASCII characters')
@@ -138,17 +137,18 @@ def getArtist(tags):
         artist = tags.get('artists')
     else:
         artist = tags.get('performer', 'Unknown')
+    log.debug(f"Retrieved artist: {artist}")
     return artist
 
 def makeDName(f, tags, dirname=None):
     if args.inplace:
         base = f.parent
     else:
-        base = pathlib.Path(bases[tags['format']])
+        base = pathlib.Path(bases.get(tags['format'], args.base))
 
         if dirname is None:
-            compilation = str(tags.get('compilation', 'No'))
-            if compilation.lower() == 'yes' or compilation == '1':
+            compilation = str(tags.get('compilation', 'No')).lower()
+            if compilation in ['yes', '1', 'true']:
                 dirname = args.various
             elif args.albartist and tags.get('album_performer'):
                 dirname = tags.get('album_performer')
@@ -200,13 +200,15 @@ def doMove(src, dest):
             raise Exception("{dest.parent} exists, and is not a directory")
 
         if args.action == ACTION_LINK:
-            src.link_to(dest)
+            dest.hardlink_to(src)
+        elif args.action == ACTION_SYMLINK:
+            dest.symlink_to(src)
         elif args.action == ACTION_MOVE:
             src.rename(dest)
         elif args.cation == ACTION_COPY:
             shutil.copy2(src, dest)
-        elif args.action == ACTION_SYMLINK:
-            dest.symlink_to(src)
+        else:
+            raise Exception("Unknown action: %s", args.action)
 
 
 def actionName():
@@ -238,6 +240,8 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
 
     except NotAudioException as e:
         log.warning(e)
+    except FileExistsError as e:
+        log.warning(f"Destination file {f} exists.  Cannot move")
     except Exception as e:
         log.warning(f"Caught exception {e} processing {f.name}")
         log.exception(e)
@@ -321,17 +325,10 @@ args = processArgs()
 log = initLogging()
 
 if args.split:
-    bases = {
-        'FLAC': args.flacbase,
-        'MPEG Audio': args.mp3base,
-        'MPEG-4': args.mp4base
-    }
+    bases = dict(map(lambda y: [y[0].upper(), y[1]], map(lambda x: x.split("="), args.bases)))
+    print(bases)
 else:
-    bases = {
-        'FLAC': args.base,
-        'MPEG Audio': args.base,
-        'MPEG-4': args.base
-    }
+    bases = {}
 
 for name in args.files:
     try:
