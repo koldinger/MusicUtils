@@ -7,7 +7,6 @@ import pprint
 
 import music_tag
 
-
 def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
 
@@ -23,20 +22,13 @@ def parse_args():
 def loadTags(d):
     #print(f"Loading tags for dir {d}")
     data = {}
-    dirs = []
 
     files = d.iterdir()
     for f in files:
-        #print(f"Loading tags for file {f}")
-        if f.is_dir():
-            dirs.append(f)
-        elif isAudio(f):
+        if f.is_file() and isAudio(f):
             data[f.name] = music_tag.load_file(f.resolve())
-        else:
-            #print(f"Skipping non-audio file {f}")
-            pass
 
-    return data, dirs
+    return data
 
 def collectAndCheck(tag, data):
     values = {}
@@ -51,41 +43,118 @@ def collectAndCheck(tag, data):
             missing.append(file)
     return values, missing
 
-check_tags = ['album', 'artist', 'albumartist', 'genre', 'albumartistsort', 'disknumber', 'compilation' ]
+def getValues(tag, data):
+    values = set()
+    for file in data:
+        x = data[file].get(tag)
+        if x:
+            values.add(x.first)
+    return values
 
-def checkConsistency(d, details, recurse):
+def splitByDisk(data):
+    disks = {}
+    for i in data:
+        disknum = data[i].get('disknumber')
+        if disknum:
+            num = disknum.first
+        else:
+            num = 0
+        disks.setdefault(num, {}).update({i: data[i]})
+    
+    return disks
+
+
+
+album_tags = ['album', 'artist', 'albumartist', 'genre', 'albumartistsort', 'totaldisks' ]
+disk_tags =  ['disknumber', 'totaltracks']
+
+def checkConsistency(d, details):
     if not d.is_dir():
         return
 
-    data, subDirs = loadTags(d)
-
-    tagVals = {}
-    missing = []
+    data =  loadTags(d)
 
     if data:
-        for t in check_tags:
+        for t in album_tags:
             tagVals, missing = collectAndCheck(t, data)
             if len(tagVals) > 1:
-                print(f"Inconsistent {t} values in {d}: {list(tagVals.keys())}")
+                report(f"Inconsistent {t} values in {d}: {list(tagVals.keys())}")
                 if details:
                     for v in tagVals.keys():
-                        print(f"    {v}: {tagVals[v]}")
+                        report(f"    {v}: {tagVals[v]}")
 
             if missing:
-                print(f"Missing tag {t} in files in {d}")
-                pprint.pprint(missing, compact=True, indent=8)
+                if len(missing) == len(data):
+                    report(f"Missing tag {t} in all files")
+                else:
+                    report(f"Missing tag {t} in files in {missing}")
 
+        diskdata = splitByDisk(data)
+        numdisks = getValues('totaldisks', data)
+        if len(numdisks) > 1:
+            report(f"Unable to check number of disks.  Inconsistent values: {list(numdisks)}")
+        elif numdisks:
+            num = numdisks.pop()
+            if len(diskdata) != num:
+                report(f"Number of disks listed {num} does not match number of disks {len(diskdata)}")
+                disks = getValues('disknumber', data)
+                alldisks = set(range(1, num + 1))
+                report(f"Missing disks: {alldisks - disks}")
+        
+        for disk in diskdata:
+            d = diskdata[disk]
+            for tag in disk_tags:
+                tagVals, missing = collectAndCheck(t, d)
+                if len(tagVals) > 1:
+                    report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
+                    if details:
+                        for v in tagVals.keys():
+                            print(f"    {v}: {tagVals[v]}")
+                if missing:
+                    if len(missing) == len(d):
+                        report(f"Missing tag {t} in all files for disk {disk}")
+                    else:
+                        report(f"Missing tag {t} in files for disk {disk} in {missing}")
+            totaltracks = getValues('totaltracks', d)
+            if len(totaltracks) > 1:
+                report(f"Unable to check number of disks.  Inconsistent values: {list(totaltracks)}")
+            elif totaltracks:
+                num = totaltracks.pop()
+                if len(d) != num:
+                    report(f"Number of tracks listed {num} does not match number of tracks {len(d)} for disk {disk}")
+                    tracks = getValues('tracknumber', d)
+                    alltracks = set(range(1, num + 1))
+                    report(f"Missing tracks: {alltracks - tracks}")
+
+
+__first = True
+__dir = None
+def setDir(d):
+    global __first, __dir
+    __dir = d
+    __first = True
+
+def report(string):
+    global __first, __dir
+    if __first:
+        print("-" * 40)
+        print(__dir)
+        __first = False
+    print(string)
+
+def checkDir(d, details, recurse):
+    setDir(d)
+    checkConsistency(d, details)
     if recurse:
-        for i in sorted(subDirs):
-            print("-" * 80)
-            print(i)
-            checkConsistency(i, details, True)
+        for i in sorted(d.iterdir()):
+            if i.is_dir():
+                checkDir(i, details, True)
 
 def main():
     args = parse_args()
 
     for i in args.directories:
-        checkConsistency(i, args.details, args.recurse)
+        checkDir(i, args.details, args.recurse)
 
 
 if __name__ == "__main__":
