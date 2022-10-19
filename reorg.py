@@ -48,7 +48,7 @@ def processArgs():
     parser.add_argument('--albartist', '-a', dest='albartist', default=True, action=argparse.BooleanOptionalAction, help='Use album artist for default directory if available' + _def)
     parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                                help='"Artist" name for various artists collections' + _def)
     parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,      help='Use articles')
-    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming if the genre starts with this')
+    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming')
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                         help='Maximum length of file names' + _def)
     parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                             help='Cleanup empty directories and dragged files when done' + _def)
 
@@ -122,7 +122,7 @@ def makeFName(f, tags):
 
 def makeComposerString(composers):
     # Make a unique list of composers.
-    unique = list(map(munge, list(dict.fromkeys(composers))))
+    unique = list(map(munge, composers))
 
     string = ",_&_".join(unique[0:2])
     if len(unique) > 2:
@@ -160,7 +160,7 @@ def makeDName(f, tags, dirname=None):
     log.debug(f"Dir: {f.parent} -> {base}")
     return base
 
-interestingTags = ['format', 'set', 'part_position', 'track_name_position', 'track_name', 'album', 'performer']
+interestingTags = ['format', 'set', 'part_position', 'track_name_position', 'track_name', 'album', 'performer', 'composer']
 def getTags(f):
     info = MediaInfo.parse(f.absolute())
     if len(info.audio_tracks) > 0:
@@ -175,7 +175,10 @@ def getTags(f):
         raise NotAudioException(f"{f} is not an audio type")
 
 def makeName(f, tags, dirname = None):
-    dirname = makeDName(f, tags, dirname)
+    if dirname is None:
+        dirname = makeDName(f, tags, dirname)
+    else:
+        dirname = pathlib.Path(dirname)
 
     newFile = dirname.joinpath(makeFName(f, tags))
     
@@ -257,7 +260,7 @@ def reorgDir(d):
         log.info(f"Processing Directory {d}")
         dirs = []
         audio = []
-        composers = []
+        composers = set()
         dragfiles = []
         files = sorted(filter(lambda x: not x.name.startswith('.'), list(d.iterdir())))
 
@@ -275,7 +278,7 @@ def reorgDir(d):
                         tags = getTags(f)
                         audio.append((f, tags))
                         if args.classical and tags.get('composer'):
-                            composers.append(tags.get('composer'))
+                            composers.add(tags.get('composer'))
             except NotAudioException as e:
                 log.warning(e)
             except Exception as e:
