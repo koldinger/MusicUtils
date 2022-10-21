@@ -14,7 +14,8 @@ import functools
 
 import colorlog
 import unidecode
-from pymediainfo import MediaInfo
+#from pymediainfo import MediaInfo
+import music_tag
 
 class NotAudioException(Exception):
     pass
@@ -80,33 +81,26 @@ def noSlash(tag):
 
 def makeFName(f, tags):
     name = ""
-    diskno = None
-    if 'part_position' in tags:
-        diskno = str(tags.get('part_position'))
-    elif 'set' in tags:
-        diskno = str(tags.get('set'))
-    elif 'part' in tags:
-        diskno = str(tags.get('part'))
+    diskno = tags.get('discnumber').first
+    totaldiscs = tags.get('totaldiscs').first
 
-    title = tags.get('title')
-    title = title if title else tags.get('track_name', 'Unknown')
-    if 'title__more' in tags:
-        title = title + " " + tags.get('title__more')
-    elif 'track_name__more' in tags:
-        title = title + " " + tags.get('track_name__more')
+    title = tags.get('tracktitle').first
+    if title is None:
+        title = 'Unknown'
+
+    if 'subtitle' in tags:
+        title = title + " " + tags.get('subtitle').first
     #elif 'part' in tags:
     #    title = title + " " + str(tags.get('part'))
 
-    if 'track_name_position' in tags:
-        track = noSlash(str(tags['track_name_position']))
-    elif 'track' in tags:
-        track = noSlash(str(tags['track']))
+    if 'tracknumber' in tags:
+        track = str(tags.get('tracknumber'))
     else:
         track = '0'
 
 
-    if diskno:
-        trk = "{0}-{1}".format(noSlash(diskno), track.zfill(2))
+    if totaldiscs and totaldiscs > 1 and diskno:
+        trk = "{0}-{1}".format(noSlash(str(diskno)), track.zfill(2))
     else:
         trk = noSlash(track).zfill(2) 
 
@@ -131,12 +125,7 @@ def makeComposerString(composers):
     return string
 
 def getArtist(tags):
-    if 'artist' in tags:
-        artist = tags.get('artist')
-    elif 'artists' in tags:
-        artist = tags.get('artists')
-    else:
-        artist = tags.get('performer', 'Unknown')
+    artist = tags.get('artist').first
     log.debug(f"Retrieved artist: {artist}")
     return artist
 
@@ -144,35 +133,34 @@ def makeDName(f, tags, dirname=None):
     if args.inplace:
         base = f.parent
     else:
-        base = pathlib.Path(bases.get(tags['format'], args.base))
+        base = pathlib.Path(bases.get(tags['#codec'], args.base))
 
         if dirname is None:
-            compilation = str(tags.get('compilation', 'No')).lower()
+            compilation = str(tags.get('compilation')).lower()
             if compilation in ['yes', '1', 'true']:
                 dirname = args.various
-            elif args.albartist and tags.get('album_performer'):
-                dirname = tags.get('album_performer')
+            elif args.albartist and tags.get('albumartist'):
+                dirname = tags.get('albumartist').first
             else:
                 dirname = getArtist(tags)
 
-        base = base.joinpath(munge(dirname), munge(tags.get('album', 'Unknown')))
+        album = tags.get('album').first
+        if album is None:
+            album = 'Unknown'
+
+        base = base.joinpath(munge(dirname), munge(album))
 
     log.debug(f"Dir: {f.parent} -> {base}")
     return base
 
-interestingTags = ['format', 'set', 'part_position', 'track_name_position', 'track_name', 'album', 'performer', 'composer']
 def getTags(f):
-    info = MediaInfo.parse(f.absolute())
-    if len(info.audio_tracks) > 0:
-        tags = info.general_tracks[0].to_data()
-        if args.verbose > 3:
-            log.debug(f"Info for {f}")
-            interesting = dict(filter(lambda x: x[0] in interestingTags, tags.items()))
-            log.debug(interesting)
-
+    log.debug(f"Getting tags from file {f}")
+    try:
+        tags = music_tag.load_file(f)
         return tags
-    else:
-        raise NotAudioException(f"{f} is not an audio type")
+    except NotImplementedError as e:
+        log.warning(f"Could not retrieve tags from {f}")
+        raise NotAudioException(f.resolve())
 
 def makeName(f, tags, dirname = None):
     if dirname is None:
@@ -268,7 +256,7 @@ def reorgDir(d):
 
         for f in files:
             try:
-                log.debug(f"Checking {f}")
+                log.debug(f"Checking {f} -- {f.is_dir()} {f.is_file()}")
                 if f.is_dir():
                     dirs.append(f)
                 elif f.is_file():
@@ -296,6 +284,7 @@ def reorgDir(d):
     except Exception as e:
         log.warning(f"Caught exception processing {name}: {e}")
         log.exception(e)
+        raise e
 
 
 
