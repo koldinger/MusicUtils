@@ -47,11 +47,14 @@ def processArgs():
     parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction, help='Normalize Unicode Strings')
     parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,    help='Rename files inplace')
     parser.add_argument('--albartist', '-a', dest='albartist', default=True, action=argparse.BooleanOptionalAction, help='Use album artist for default directory if available' + _def)
+    parser.add_argument('--discnum', '-D', dest='alwaysdisc', default=False, action=argparse.BooleanOptionalAction, help='Always use the disknumber in file names' + _def)
     parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                                help='"Artist" name for various artists collections' + _def)
     parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,      help='Use articles')
     parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming')
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                         help='Maximum length of file names' + _def)
     parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                             help='Cleanup empty directories and dragged files when done' + _def)
+    parser.add_argument('--ignore-case', '-I', dest='ignorecase', default=False,  action=argparse.BooleanOptionalAction,
+                                                                                                                    help='Ignore case when determining if target exists' + _def)
 
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                               help='Increase the verbosity')
 
@@ -99,7 +102,7 @@ def makeFName(f, tags):
         track = '0'
 
 
-    if totaldiscs and totaldiscs > 1 and diskno:
+    if diskno is not None and (args.alwaysdisc or  totaldiscs and totaldiscs > 1):
         trk = "{0}-{1}".format(noSlash(str(diskno)), track.zfill(2))
     else:
         trk = noSlash(track).zfill(2) 
@@ -133,7 +136,8 @@ def makeDName(f, tags, dirname=None):
     if args.inplace:
         base = f.parent
     else:
-        base = pathlib.Path(bases.get(tags['#codec'], args.base))
+        codec = tags.get('#codec').first.split('.')[0].lower()
+        base = pathlib.Path(bases.get(codec, args.base))
 
         if dirname is None:
             compilation = str(tags.get('compilation')).lower()
@@ -223,19 +227,28 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
         if dest.exists():
             if not f.samefile(dest):
                 log.warning(f"{dest} exists, skipping ({f})")
-            return
+            return dest
+
+        if args.ignorecase and f.name.lower() == dest.name.lower():
+            log.debug(f"Not moving {f.name} to {dest.name}.   Change is only in case")
+            return dest
+
         log.info(f"{action} {f}\t==>  {dest}")
 
         doMove(f, dest)
         dragFiles(dragfiles, dest.parent)
 
+        return dest
     except NotAudioException as e:
         log.warning(e)
+        return None
     except FileExistsError as e:
         log.warning(f"Destination file {f} exists.  Cannot move")
+        return dest
     except Exception as e:
         log.warning(f"Caught exception {e} processing {f.name}")
         log.exception(e)
+        return None
 
 def isDraggable(f):
     for pat in args.drag:
@@ -276,8 +289,13 @@ def reorgDir(d):
         if args.classical and composers:
             composerStr = munge(makeComposerString(composers))
 
+        destdirs = set()
         for f in audio:
-            renameFile(f[0], f[1], dragfiles=dragfiles, dirname=composerStr)
+            dest = renameFile(f[0], f[1], dragfiles=dragfiles, dirname=composerStr)
+            destdirs.add(dest.parent)
+
+        if len(destdirs) > 1:
+            log.warning(f"Not all files from {d} went to the same directory: {list(map(str, destdirs))}")
 
         for f in dirs:
             reorgDir(f)
@@ -317,8 +335,7 @@ args = processArgs()
 log = initLogging()
 
 if args.split:
-    bases = dict(map(lambda y: [y[0].upper(), y[1]], map(lambda x: x.split("="), args.bases)))
-    print(bases)
+    bases = dict(map(lambda y: [y[0].lower(), y[1]], map(lambda x: x.split("="), args.bases)))
 else:
     bases = {}
 
