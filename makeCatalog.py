@@ -3,11 +3,12 @@
 import argparse
 import logging
 import json
+import csv
 import pathlib
 import pprint
 import unicodedata
 import os.path
-from functools import reduce
+import itertools
 
 from pymediainfo import MediaInfo
 
@@ -16,6 +17,9 @@ class NotAudioException(Exception):
 
 args = None
 log = None
+
+allfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'disks', 'tracks', 'albums', 'title' ] 
+trackfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'title', 'isize', 'fullpath' ] 
 
 def initLogging():
     global log
@@ -29,13 +33,14 @@ def parseArgs():
     parser = argparse.ArgumentParser("Generate a catalog of music files")
     parser.add_argument('--level', '-l', dest='level', choices=['artist', 'album', 'track'], default='track', help="Level of reporting")
     parser.add_argument('--fields', '-f', dest='fields', nargs='+', help='Fields to print',
-                         choices=['title', 'artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'disks', 'tracks', 'albums'],
-                         default=['albumartist', 'album', 'track', 'title', 'path'])
+                         choices=allfields, default=['albumartist', 'album', 'track', 'title', 'path'])
     parser.add_argument('--fullpath', '-F', dest='fullpath', default=False, action='store_true', help='Print full paths for files')
     parser.add_argument('--base', '-b', dest='base', default=None, help='Use as base for relative paths')
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help="Increase verbosity.  May be repeated")
     #parser.add_argument('--test', '-t', metavar="(-100 to 100)", choices=range(-100, 100), help="Test")
-    parser.add_argument('dirs', nargs="+", help='Base directories to catalog')
+    parser.add_argument('--save', '-S', dest='save', help='Save the database to a CSV file')
+    parser.add_argument('--load', '-L', dest='load', help='Preload the database from a CSV file before parsing other files')
+    parser.add_argument('dirs', nargs="*", help='Base directories to catalog')
     args = parser.parse_args()
     return args
 
@@ -54,7 +59,12 @@ def clean(string):
     return unicodedata.normalize('NFKC', string).strip()
 
 def getArtist(tags):
-    artist = clean(tags.get('performer', 'Unknown'))
+    if 'artist' in tags:
+        artist = tags.get('artist')
+    elif 'artists' in tags:
+        artist = tags.get('artists')
+    else:
+        artist = tags.get('performer', 'Unknown')
     albArtist = clean(tags.get('album_performer', artist))
     #compilation = str(tag.get('compilation', 'No'))
     setMaxLen('artist', artist)
@@ -110,6 +120,7 @@ def getTags(f):
         raise NotAudioException(f"{f} is not an audio type")
 
 database = {}
+processed = {}
 
 _lastArtist = None
 _lastAlbum  = None
@@ -142,20 +153,29 @@ def makeHeaderLines(fmt):
     return header
 
 def printAlbumInfo(artist, album, tracks, fmt):
-    (disks, tracks, duration, size) = getAlbumStats(tracks)
+    (disks, tracks, duration, size, genres) = getAlbumStats(tracks)
     duration = milliToTime(duration)
     size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
     values = {"artist": artist, "albumartist": artist, "album": album, "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'tracks': tracks, 'disks': disks, 'albums': '', 'size': size}
+    print(genres)
     printTrackInfo(values, fmt)
 
 
+def summarize(a):
+    log.debug(f"{type(a[0])}, {a}")
+    if isinstance(a[0], list):
+        return set(itertools.chain(*a))
+    else:
+        return sum(a)
+
 def printArtistInfo(artist, albums, fmt):
     albumInfo = [getAlbumStats(albums[x]) for x in albums]
-    (disks, tracks, duration, size) = tuple(map(sum, zip(*albumInfo)))
+    (disks, tracks, duration, size, genres) = tuple(map(summarize, zip(*albumInfo)))
     albums = len(albumInfo)
     duration = milliToTime(duration)
+    genres = ",".join(genres)
     size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
-    values = {"artist": artist, "albumartist": artist, "album": str(albums), "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'disk': '', 'tracks': tracks, 'disks': disks, 'albums': albums, 'size': size}
+    values = {"artist": artist, "albumartist": artist, "album": str(albums), "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'disk': '', 'tracks': tracks, 'disks': disks, 'albums': albums, 'size': size, "genre": genres}
     printTrackInfo(values, fmt)
 
 def printDatabase():
@@ -178,7 +198,7 @@ def printDatabase():
                         printTrackInfo(t, fmt)
 
 def milliToTime(length):
-    length = length / 1000
+    length = int(length) / 1000
     length = f"{int(length / 60)}:{int(length % 60):02}"
     return length
 
@@ -207,9 +227,10 @@ def makeInfo(tag, f, base):
     disk   = getDiskNumber(tag)
     isize, size = getSize(tag)
 
-    path = f.absolute() if args.fullpath else f.absolute().relative_to(base)
+    fullpath = f.absolute()
+    path = fullpath if args.fullpath else f.absolute().relative_to(base)
 
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath}
     return values
 
 def getAlbumStats(album):
@@ -217,17 +238,23 @@ def getAlbumStats(album):
     disks = len(set([album[x]['disk'] for x in album]))
     duration = sum([album[x]['duration'] for x in album])
     size = sum([album[x]['isize'] for x in album])
+    genres = list(set([album[x]['genre'] for x in album]))
     #print(disks, tracks, duration)
-    return (disks, tracks, duration, size)
+    return (disks, tracks, duration, size, genres)
 
 def processFile(f, base):
     try:
-        tag = getTags(f)
-        info = makeInfo(tag, f, base)
+        path = f.absolute()
+        if not processed.get(path, False):
+            tag = getTags(f)
+            info = makeInfo(tag, f, base)
 
-        albums = database.setdefault(info['albumartist'], {})
-        tracks = albums.setdefault(info['album'], {})
-        tracks[(info['disk'].zfill(2), info['track'].zfill(2))] = info
+            albums = database.setdefault(info['albumartist'], {})
+            tracks = albums.setdefault(info['album'], {})
+            tracks[(info['disk'].zfill(2), info['track'].zfill(2))] = info
+            processed[path] = True
+        else:
+            log.info(f"Skipping {f}")
     except NotAudioException:
         log.warning(f"{f} is not an audio file")
 
@@ -248,8 +275,40 @@ def processDirTree(d, base):
         for x in dirs:
             processDirTree(x, base)
 
+def loadDB(base):
+    if args.load:
+        with open(args.load) as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                # Clean up some data
+                track = int(row['track'])
+                disk = int(row['disk']) if row['disk'] else 0
+                row['path'] = row['fullpath'] if args.fullpath else pathlib.Path(row['fullpath']).absolute().relative_to(base)
+                row['duration'] = int(row['duration'])
+                row['isize'] = int(row['isize'])
+
+                database.setdefault(row['artist'], {}).setdefault(row['album'], {})[(disk, track)] = row
+
+                setMaxLen('artist', row['artist'])
+                setMaxLen('albumartist', row['albumartist'])
+                setMaxLen('album', row['album'])
+                setMaxLen('title', row['title'])
+                processed[pathlib.Path(row['fullpath'])] = True
+
+def saveDB():
+    if args.save:
+        with open(args.save, "w") as f:
+            writer = csv.DictWriter(f, fieldnames=trackfields, extrasaction='ignore')
+            writer.writeheader()
+            for artist in database:
+                for album in database[artist]:
+                    for track in database[artist][album]:
+                        #pprint.pprint(database[artist][album][track], width=132, compact=True)
+                        writer.writerow(database[artist][album][track])
+
+
 def main():
-    global args
+    global args, database
     args = parseArgs()
     initLogging()
     #print(args.fields)
@@ -260,13 +319,21 @@ def main():
         if not base.is_dir():
             raise Exception(f"{base} is not a directory")
     else:
-        base = pathlib.Path(os.path.commonpath([x.absolute() for x in dirs]))
+        if len(dirs):
+            base = pathlib.Path(os.path.commonpath([x.absolute() for x in dirs]))
+        else:
+            base = pathlib.Path("/")
+
+    loadDB(base)
+    log.warning(f"Loaded {len(processed)} entries")
 
     for d in dirs:
         log.info(f"Starting {d}")
         processDirTree(d, base)
+    log.warning(f"Processed {len(processed)} entries")
 
     printDatabase()
+    saveDB()
     
 
 if __name__ == "__main__":
