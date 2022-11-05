@@ -78,7 +78,8 @@ def checkConsistency(d, details):
         for t in album_tags:
             tagVals, missing = collectAndCheck(t, data)
             if len(tagVals) > 1:
-                report(f"Inconsistent {t} values in {d}: {list(tagVals.keys())}")
+                #print(tagVals.keys(), fmtTuples(tagVals.keys()))
+                report(f"Inconsistent {t} values in {d}: {fmtTuples(tagVals.keys())}")
                 if details:
                     for v in tagVals.keys():
                         report(f"    {v}: {tagVals[v]}")
@@ -92,7 +93,7 @@ def checkConsistency(d, details):
         diskdata = splitByDisk(data)
         numdisks = getValues('totaldisks', data)
         if len(numdisks) > 1:
-            report(f"Unable to check number of disks.  Inconsistent values: {list(numdisks)}")
+            report(f"Unable to check number of disks.  Inconsistent values: {fmtTuples(numdisks)}")
         elif numdisks:
             num = numdisks.pop()
             if len(diskdata) != num:
@@ -106,6 +107,7 @@ def checkConsistency(d, details):
             for tag in disk_tags:
                 tagVals, missing = collectAndCheck(t, d)
                 if len(tagVals) > 1:
+                    print(tagVals.keys(), fmtTuples(tagVals.keys()))
                     report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
                     if details:
                         for v in tagVals.keys():
@@ -141,6 +143,15 @@ def report(string):
         print(__dir)
         __first = False
     print(string)
+
+def fmtTuple(x):
+    if len(x) == 1:
+        return x[0]
+    return "(" + ", ".join(x) + ")"
+
+def fmtTuples(x):
+    return ", ".join(map(fmtTuple, x))
+
 
 def checkDir(d, details, recurse):
     setDir(d)
