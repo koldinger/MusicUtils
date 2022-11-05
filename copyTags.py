@@ -13,6 +13,16 @@ import music_tag
 
 from termcolor import colored
 
+class PrintOnce:
+    def __init__(self, message):
+        self.message = message
+        self.first = True
+
+    def print(self):
+        if self.first:
+            print(self.message)
+            self.first = False
+
 def backupFile(path):
     bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
     print("Backing up {} to {}".format(path, bupPath))
@@ -28,7 +38,7 @@ def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
 
 def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
-    print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
+    #print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
     changes = copyDir(srcDir, dstDir, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
 
     subDirs = sorted([x.name for x in srcDir.iterdir() if x.is_dir()])
@@ -46,8 +56,8 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
     return changes
 
 
-def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
-    print("Processing directory: {} into {}".format(colored(srcDir, "cyan"), colored(dstDir, "cyan")))
+def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
+    header = PrintOnce("Processing directory: {} into {}".format(colored(srcDir, "cyan"), colored(dstDir, "cyan")))
     srcFiles = filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir())
     dstFiles = filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir())
 
@@ -56,13 +66,14 @@ def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=Fa
     pairs = matchFiles(srcFiles, dstFiles)
 
     for files in pairs:
+        header.print()
         changes =  copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
         nChanges = addTuple(nChanges, changes)
 
     return nChanges
 
-def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=['artwork']):
-    print("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
+def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=[]):
+    header = PrintOnce("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
     added = []
     replaced = []
     deleted = []
@@ -110,12 +121,13 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                         continue
                     if not replace:
                         continue
+                    header.print()
                     replaced.append(tag)
                     nReplaced += 1
-
                     if not short:
                         print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
                 else:
+                    header.print()
                     added.append(tag)
                     nAdded += 1
                     if not short:
@@ -123,6 +135,7 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                 toTags[tag] = frValue
                 changed = True
             elif delete and toValue:
+                header.print()
                 deleted.append(tag)
                 if not short:
                     print("\tDeleting  {:25}".format(tag))
@@ -136,6 +149,7 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
             nErrors += 1
 
     if short:
+        header.print()
         if added:
             print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
         if replaced:
