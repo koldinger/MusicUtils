@@ -45,6 +45,8 @@ def parseArgs():
     parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
     parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
+    parser.add_argument("--print", "-P",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print current tags (no changes made)")
+    parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of if they exist")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
 
@@ -60,34 +62,55 @@ def processFile(f, tags, delete, preserve, append, dryrun):
         return
     print(f"Processing file {f}")
     data = music_tag.load_file(f)
+    updated = False
 
     times = f.stat()
     for tag in tags:
         values = tags[tag]
-        if append:
-            newvals = values.union(data[tag].values)
+        if values != set(data[tag].values):
+            if append:
+                newvals = values.union(data[tag].values)
+            else:
+                newvals = list(values)
+            print(f"    Setting tag {tag} to {newvals}")
+            data[tag] = list(newvals)
+            updated = True
         else:
-            newvals = list(values)
-        print(f"    Setting tag {tag} to {newvals}")
-        data[tag] = list(newvals)
+            print(f"    Not changing tag {tag}.  Already correct")
 
     if delete:
         for tag in delete:
             if tag in data:
                 print(f"    Removing tag {tag}")
                 data.remove_tag(tag)
+                updated = True
 
-    if not dryrun:
+    if not dryrun and updated:
         data.save()
         if preserve:
             os.utime(f, times=(times.st_atime, times.st_mtime))
 
+def printFile(f, all):
+    if not isAudio(f):
+        return
+    print(f"File: {f}")
+    data = music_tag.load_file(f)
+
+    for t in sorted(data.tags()):
+        if data[t] or all:
+            print("{:27}: {}".format(t.upper(), data[t]))
+
+
 def main():
     args = parseArgs()
-    tags = makeTagValues(flatten(args.tags))
-    delete = flatten(args.delete)
-    for f in args.files:
-        processFile(f, tags, delete, args.preserve, args.append, args.dryrun)
+    if args.print or not args.tags:
+        for f in args.files:
+            printFile(f, args.alltags)
+    else:
+        tags = makeTagValues(flatten(args.tags))
+        delete = flatten(args.delete)
+        for f in args.files:
+            processFile(f, tags, delete, args.preserve, args.append, args.dryrun)
 
 if __name__ == '__main__':
     main()
