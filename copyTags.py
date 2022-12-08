@@ -125,7 +125,7 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                     replaced.append(tag)
                     nReplaced += 1
                     if not short:
-                        print("\tReplacing {:25}: {} -> {}".format(tag, frValue, toValue))
+                        print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
                 else:
                     header.print()
                     added.append(tag)
