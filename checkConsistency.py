@@ -37,7 +37,11 @@ def collectAndCheck(tag, data):
     for file in data:
         x = data[file].get(tag)
         if x:
-            val = tuple(sorted(x.values))
+            if tag == 'artwork':
+                tagVals = map(str, x.values)
+            else:
+                tagVals = x.values
+            val = tuple(sorted(tagVals))
             values.setdefault(val, []).append(file)
         else:
             missing.append(file)
@@ -65,7 +69,7 @@ def splitByDisk(data):
 
 
 
-album_tags = ['album', 'artist', 'albumartist', 'genre', 'albumartistsort', 'totaldisks' ]
+album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork' ]
 disk_tags =  ['disknumber', 'totaltracks']
 
 def checkConsistency(d, details):
@@ -147,6 +151,7 @@ def report(string):
 def fmtTuple(x):
     if len(x) == 1:
         return x[0]
+    #return "(" + ", ".join(str(x)) + ")"
     return "(" + ", ".join(x) + ")"
 
 def fmtTuples(x):
