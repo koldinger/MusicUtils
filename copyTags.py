@@ -198,4 +198,7 @@ def main():
     print("Files Changed: {} Tags Added: {} Tags Replaced: {} Tags Deleted: {} Errors: {}".format(*nChanges))
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit("Interrupted")
