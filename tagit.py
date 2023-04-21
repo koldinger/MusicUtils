@@ -8,6 +8,8 @@ import os
 import pprint
 import traceback
 
+from functools import cache
+
 import magic
 import music_tag
 
@@ -57,6 +59,11 @@ def flatten(l):
         return [num for sublist in l for num in sublist]
     return l
 
+@cache
+def readfile(name):
+    with open(x, "rb") as f:
+        return f.read()
+
 def processFile(f, tags, delete, preserve, append, dryrun):
     if not isAudio(f):
         return
@@ -66,7 +73,10 @@ def processFile(f, tags, delete, preserve, append, dryrun):
 
     times = f.stat()
     for tag in tags:
-        values = tags[tag]
+        if tag.lower() == 'artwork':
+            values = map(readfile, tags[tag])
+        else:
+            values = tags[tag]
         if values != set(data[tag].values):
             if append:
                 newvals = values.union(data[tag].values)
@@ -78,17 +88,17 @@ def processFile(f, tags, delete, preserve, append, dryrun):
         else:
             print(f"    Not changing tag {tag}.  Already correct")
 
-    if delete:
-        for tag in delete:
-            if tag in data:
-                print(f"    Removing tag {tag}")
-                data.remove_tag(tag)
-                updated = True
+        if delete:
+            for tag in delete:
+                if tag in data:
+                    print(f"    Removing tag {tag}")
+                    data.remove_tag(tag)
+                    updated = True
 
-    if not dryrun and updated:
-        data.save()
-        if preserve:
-            os.utime(f, times=(times.st_atime, times.st_mtime))
+        if not dryrun and updated:
+            data.save()
+            if preserve:
+                os.utime(f, times=(times.st_atime, times.st_mtime))
 
 def printFile(f, all):
     if not isAudio(f):
