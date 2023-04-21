@@ -138,6 +138,7 @@ def makeDName(f, tags, dirname=None):
     else:
         codec = tags.get('#codec').first.split('.')[0].lower()
         base = pathlib.Path(bases.get(codec, args.base))
+        log.debug(f"BaseDir: {base}")
 
         if dirname is None:
             compilation = str(tags.get('compilation')).lower()
@@ -167,10 +168,7 @@ def getTags(f):
         raise NotAudioException(f.resolve())
 
 def makeName(f, tags, dirname = None):
-    if dirname is None:
-        dirname = makeDName(f, tags, dirname)
-    else:
-        dirname = pathlib.Path(dirname)
+    dirname = makeDName(f, tags, dirname)
 
     newFile = dirname.joinpath(makeFName(f, tags))
     
@@ -200,7 +198,7 @@ def doMove(src, dest):
             dest.symlink_to(src)
         elif args.action == ACTION_MOVE:
             src.rename(dest)
-        elif args.cation == ACTION_COPY:
+        elif args.action == ACTION_COPY:
             shutil.copy2(src, dest)
         else:
             raise Exception("Unknown action: %s", args.action)
@@ -211,7 +209,7 @@ def actionName():
         name = "Linking"
     elif args.action == ACTION_MOVE:
         name = "Moving"
-    elif args.cation == ACTION_COPY:
+    elif args.action == ACTION_COPY:
         name = "Copying"
     elif args.action == ACTION_SYMLINK:
         name = "SymLinking"
@@ -279,7 +277,7 @@ def reorgDir(d):
                         tags = getTags(f)
                         audio.append((f, tags))
                         if args.classical and tags.get('composer'):
-                            composers.add(tags.get('composer'))
+                            composers.add(tags.get('composer').first)
             except NotAudioException as e:
                 log.warning(e)
             except Exception as e:
