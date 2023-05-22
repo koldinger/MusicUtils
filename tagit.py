@@ -32,10 +32,11 @@ def backupFile(path):
 
 
 def makeTagValues(tags):
-    tags = map(lambda x: map(lambda y: y.strip(), x.split("=")), tags)
     ret = {}
-    for x, y in tags:
-        ret.setdefault(x, set()).add(y)
+    if tags:
+        tags = map(lambda x: map(lambda y: y.strip(), x.split("=")), tags)
+        for x, y in tags:
+            ret.setdefault(x, set()).add(y)
     return ret
 
 def isAudio(path):
@@ -66,6 +67,7 @@ def readfile(name):
 
 def processFile(f, tags, delete, preserve, append, dryrun):
     if not isAudio(f):
+        print(f"{f} isn't an audio file")
         return
     print(f"Processing file {f}")
     data = music_tag.load_file(f)
@@ -88,17 +90,18 @@ def processFile(f, tags, delete, preserve, append, dryrun):
         else:
             print(f"    Not changing tag {tag}.  Already correct")
 
-        if delete:
-            for tag in delete:
-                if tag in data:
-                    print(f"    Removing tag {tag}")
-                    data.remove_tag(tag)
-                    updated = True
+    if delete:
+        for tag in delete:
+            if tag in data:
+                print(f"    Removing tag {tag}")
+                data.remove_tag(tag)
+                updated = True
 
-        if not dryrun and updated:
-            data.save()
-            if preserve:
-                os.utime(f, times=(times.st_atime, times.st_mtime))
+
+    if not dryrun and updated:
+        data.save()
+        if preserve:
+            os.utime(f, times=(times.st_atime, times.st_mtime))
 
 def printFile(f, all):
     if not isAudio(f):
@@ -113,7 +116,7 @@ def printFile(f, all):
 
 def main():
     args = parseArgs()
-    if args.print or not args.tags:
+    if args.print or not (args.tags or args.delete):
         for f in args.files:
             printFile(f, args.alltags)
     else:
