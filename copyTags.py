@@ -74,96 +74,104 @@ def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=Fa
 
 def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=[]):
     header = PrintOnce("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
-    added = []
-    replaced = []
-    deleted = []
 
-    if backup and not dryrun:
-        backupFile(toPath)
-
-    times = toPath.stat()
-
-    frTags = music_tag.load_file(fromPath)
-    toTags = music_tag.load_file(toPath)
-
-    changed = False
     nAdded = 0
     nReplaced = 0
     nDeleted = 0
     nErrors = 0
 
-    if not tags:
-        tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
+    added = []
+    replaced = []
+    deleted = []
+    changed = False
 
-    for tag in tags:
-        try:
-            if not tag in frTags:
-                continue
-            frValue = frTags[tag]
-            # Get the "to" value
-            # if the value is unparseable, just ignore it
+    try:
+        if backup and not dryrun:
+            backupFile(toPath)
+
+        times = toPath.stat()
+
+        frTags = music_tag.load_file(fromPath)
+        toTags = music_tag.load_file(toPath)
+
+
+        if not tags:
+            tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
+
+        for tag in tags:
             try:
-                if tag in toTags:
-                    toValue = toTags[tag]
-                else:
+                if not tag in frTags:
+                    continue
+                frValue = frTags[tag]
+                # Get the "to" value
+                # if the value is unparseable, just ignore it
+                try:
+                    if tag in toTags:
+                        toValue = toTags[tag]
+                    else:
+                        toValue = None
+                except ValueError:
                     toValue = None
-            except ValueError:
-                toValue = None
 
-            if frValue:
-                if toValue:
-                    #print(tag, frValue, toValue, type(frValue), type(toValue))
-                    if tag == 'artwork':
-                        # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
-                        if frValue.first.data == toValue.first.data:
+                if frValue:
+                    if toValue:
+                        #print(tag, frValue, toValue, type(frValue), type(toValue))
+                        if tag == 'artwork':
+                            # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
+                            if frValue.first.data == toValue.first.data:
+                                continue
+                        elif frValue.values == toValue.values:
                             continue
-                    elif frValue.values == toValue.values:
-                        continue
-                    if not replace:
-                        continue
+                        if not replace:
+                            continue
+                        header.print()
+                        replaced.append(tag)
+                        nReplaced += 1
+                        if not short:
+                            print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
+                    else:
+                        header.print()
+                        added.append(tag)
+                        nAdded += 1
+                        if not short:
+                            print("\tAdding    {:25}: {}".format(tag, frValue))
+                    toTags[tag] = frValue
+                    changed = True
+                elif delete and toValue:
                     header.print()
-                    replaced.append(tag)
-                    nReplaced += 1
+                    deleted.append(tag)
                     if not short:
-                        print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
-                else:
-                    header.print()
-                    added.append(tag)
-                    nAdded += 1
-                    if not short:
-                        print("\tAdding    {:25}: {}".format(tag, frValue))
-                toTags[tag] = frValue
-                changed = True
-            elif delete and toValue:
-                header.print()
-                deleted.append(tag)
-                if not short:
-                    print("\tDeleting  {:25}".format(tag))
-                del toTags[tag]
-                nDeleted += 1
-                changed = True
-        except Exception as e:
-            print(colored("Error:", "red") + " Failed copying tag {} from {} to {}".format(colored(tag, "red"), colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
-            print(str(e))
-            # traceback.print_exc()
-            nErrors += 1
+                        print("\tDeleting  {:25}".format(tag))
+                    del toTags[tag]
+                    nDeleted += 1
+                    changed = True
+            except Exception as e:
+                print(colored("Error:", "red") + " Failed copying tag {} from {} to {}".format(colored(tag, "red"), colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
+                print(str(e))
+                # traceback.print_exc()
+                nErrors += 1
 
-    if short:
-        header.print()
-        if added:
-            print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
-        if replaced:
-            print("{:9}: {}".format(colored("Replaced", "cyan"), pprint.pformat(replaced, compact=True, width=132)))
-        if deleted:
-            print("{:9}: {}".format(colored("Deleted", "cyan"), pprint.pformat(deleted, compact=True, width=132)))
-        if not (added or deleted or replaced):
-            print(colored("Nothing changed", "cyan"))
-        print()
+        if short:
+            header.print()
+            if added:
+                print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
+            if replaced:
+                print("{:9}: {}".format(colored("Replaced", "cyan"), pprint.pformat(replaced, compact=True, width=132)))
+            if deleted:
+                print("{:9}: {}".format(colored("Deleted", "cyan"), pprint.pformat(deleted, compact=True, width=132)))
+            if not (added or deleted or replaced):
+                print(colored("Nothing changed", "cyan"))
+            print()
 
-    if changed and not dryrun:
-        toTags.save()
-        if preserve:
-            os.utime(toPath, times=(times.st_atime, times.st_mtime))
+        if changed and not dryrun:
+            toTags.save()
+            if preserve:
+                os.utime(toPath, times=(times.st_atime, times.st_mtime))
+    except Exception as e:
+        print(colored("Error", "red") + " Error processing file {}".format(colored(fromPath, 'yellow')))
+        print(str(e))
+        nErrors += 1
+
     return (int(changed), nAdded, nReplaced, nDeleted, nErrors)
 
 def parseArgs():
