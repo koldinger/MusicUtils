@@ -41,6 +41,7 @@ doConvert() {
         echo "$name" "------" "$outfile"
         mkdir -p "$outdir"
         ffmpeg -i "$i" -n -loglevel 24 -c:a aac -b:a 128k -vcodec copy "$outfile"
+        copyTags --replace "$i" "$outfile"
         touch -r "$i" "$outfile"
     #else
         #echo "Skipping $i"
