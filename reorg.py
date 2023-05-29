@@ -4,7 +4,6 @@ import argparse
 import os.path
 import sys
 import logging
-import pprint
 import pathlib
 import re
 import unicodedata
@@ -51,6 +50,7 @@ def processArgs():
     parser.add_argument('--various', '-V', dest='various', default="VariousArtists",                                help='"Artist" name for various artists collections' + _def)
     parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,      help='Use articles')
     parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming')
+    parser.add_argument('--surname', '-S', dest='surname', default=True, action=argparse.BooleanOptionalAction,     help='Use the sorted name (ie, surname) of the composer if available' + _def)
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                         help='Maximum length of file names' + _def)
     parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                             help='Cleanup empty directories and dragged files when done' + _def)
     parser.add_argument('--ignore-case', '-I', dest='ignorecase', default=False,  action=argparse.BooleanOptionalAction,
@@ -58,12 +58,14 @@ def processArgs():
 
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                               help='Increase the verbosity')
 
-    parser.add_argument('files', nargs='+', default=['.'], help='List of files/directories to reorganize')
+    parser.add_argument('files', nargs='*', default=['.'], help='List of files/directories to reorganize')
 
     args = parser.parse_args()
     return args
 
 def munge(name):
+    if name is None:
+        name = ""
     if args.normalize:
         name = unicodedata.normalize('NFKC', name)
     if args.ascii:
@@ -117,13 +119,19 @@ def makeFName(f, tags):
     log.debug(f"Name {f.name} -> {name}")
     return name
 
-def makeComposerString(composers):
+def makeComposerString(composers, maxcomps=3):
     # Make a unique list of composers.
-    unique = list(map(munge, composers))
+    unique = list(map(munge, sorted(composers)))
 
-    string = ",_&_".join(unique[0:2])
-    if len(unique) > 2:
-        string += '_et_al'
+    listed = unique[:maxcomps]
+    if len(listed) > 1:
+        string = ",_".join(listed[:-1])
+        if len(listed) > 1:
+            string = ",_&_".join([string, listed[-1]])
+        if len(unique) > maxcomps:
+            string += '_et_al'
+    else:
+        string = listed[0]
 
     return string
 
@@ -148,12 +156,11 @@ def makeDName(f, tags, dirname=None):
                 dirname = tags.get('albumartist').first
             else:
                 dirname = getArtist(tags)
+            dirname = munge(dirname)
 
-        album = tags.get('album').first
-        if album is None:
-            album = 'Unknown'
+        album = tags.get('album').first or "Unknown"
 
-        base = base.joinpath(munge(dirname), munge(album))
+        base = base.joinpath(dirname, munge(album))
 
     log.debug(f"Dir: {f.parent} -> {base}")
     return base
@@ -276,8 +283,14 @@ def reorgDir(d):
                     else:
                         tags = getTags(f)
                         audio.append((f, tags))
-                        if args.classical and tags.get('composer'):
-                            composers.add(tags.get('composer').first)
+                        if args.classical:
+                            if tags.get('composersort') and args.surname:
+                                composers.add(tags.get('composersort').first)
+                            elif tags.get('composer'):
+                                composers.add(tags.get('composer').first)
+                            elif tags.get('artist'):
+                                composers.add(tags.get('artist').first)
+
             except NotAudioException as e:
                 log.warning(e)
             except Exception as e:
@@ -285,7 +298,7 @@ def reorgDir(d):
                 log.exception(e)
 
         if args.classical and composers:
-            composerStr = munge(makeComposerString(composers))
+            composerStr = makeComposerString(composers)
 
         destdirs = set()
         for f in audio:
@@ -339,7 +352,6 @@ else:
 
 for name in args.files:
     try:
-        log.info(f"Running {name}")
         p = pathlib.Path(name)
         if not p.exists():
             log.error(f"{name} doesn't exist")
