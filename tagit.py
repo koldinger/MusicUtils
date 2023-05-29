@@ -87,16 +87,15 @@ def processFile(f, tags, delete, preserve, append, dryrun):
             print(f"    Setting tag {tag} to {newvals}")
             data[tag] = list(newvals)
             updated = True
-        else:
-            print(f"    Not changing tag {tag}.  Already correct")
+        #else:
+        #    print(f"    Not changing tag {tag}.  Value already in tags")
 
     if delete:
         for tag in delete:
-            if tag in data:
+            if data[tag]:
                 print(f"    Removing tag {tag}")
                 data.remove_tag(tag)
                 updated = True
-
 
     if not dryrun and updated:
         data.save()
