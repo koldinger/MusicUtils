@@ -12,8 +12,7 @@ from functools import cache
 
 import magic
 import music_tag
-
-from termcolor import colored
+from termcolor import colored, cprint
 
 class PrintOnce:
     def __init__(self, message):
@@ -51,6 +50,7 @@ def parseArgs():
     parser.add_argument("--print", "-P",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print current tags (no changes made)")
     parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of if they exist")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
+    parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print)")
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
 
     return parser.parse_args()
@@ -69,7 +69,7 @@ def processFile(f, tags, delete, preserve, append, dryrun):
     if not isAudio(f):
         print(f"{f} isn't an audio file")
         return
-    print(f"Processing file {f}")
+    qprint(f"Processing file {f}")
     data = music_tag.load_file(f)
     updated = False
 
@@ -84,16 +84,16 @@ def processFile(f, tags, delete, preserve, append, dryrun):
                 newvals = values.union(data[tag].values)
             else:
                 newvals = list(values)
-            print(f"    Setting tag {tag} to {newvals}")
+            qprint(f"    Setting tag {tag} to {newvals}")
             data[tag] = list(newvals)
             updated = True
         #else:
-        #    print(f"    Not changing tag {tag}.  Value already in tags")
+        #    qprint(f"    Not changing tag {tag}.  Value already in tags")
 
     if delete:
         for tag in delete:
-            if data[tag]:
-                print(f"    Removing tag {tag}")
+            if tag in data:
+                qprint(f"    Removing tag {tag}")
                 data.remove_tag(tag)
                 updated = True
 
@@ -105,16 +105,23 @@ def processFile(f, tags, delete, preserve, append, dryrun):
 def printFile(f, all):
     if not isAudio(f):
         return
-    print(f"File: {f}")
+    cprint(f"File: {f}", "green")
     data = music_tag.load_file(f)
 
     for t in sorted(data.tags()):
         if data[t] or all:
             print("{:27}: {}".format(t.upper(), data[t]))
 
+beQuiet = False
+def qprint(*args):
+    if not beQuiet:
+        print(*args)
 
 def main():
+    global beQuiet
     args = parseArgs()
+    if args.quiet:
+        beQuiet = True
     if args.print or not (args.tags or args.delete):
         for f in args.files:
             printFile(f, args.alltags)
