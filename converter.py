@@ -15,12 +15,12 @@ import music_tag
 import progressbar
 from pydub import AudioSegment
 
-Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "logger"])
+Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "params", "logger"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])
 
 defaults = {
     "mp3":  DefParams("mp3", "mp3", "192k", ".mp3", None),
-    "aac":  DefParams("aac", "ipod", "128k", ".mp4", None),
+    "aac":  DefParams("aac", "ipod", "128k", ".m4a", None),
     "ogg":  DefParams("libvorbis", "ogg", None, ".ogg", None),
     "opus": DefParams("opus", "opus", None, ".opus", None),
     "alac": DefParams("alac", "ipod", None, ".alac", None)
@@ -102,7 +102,8 @@ def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.P
         dest = pathlib.Path(destdir, src.relative_to(srcdir).with_suffix(suffix))
         logger.debug("%s -> %s", src, dest)
         if not dest.exists() or overwrite:
-            jobs.append(Conversion(src, dest, fmt, codec, bitrate, logger))
+            # TODO: Add the parameters argument.
+            jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger))
         else:
             logger.debug("Skipping %s.  Target %s exists", src, dest)
     return jobs
@@ -127,12 +128,13 @@ def convert(job):
     logger.debug("Begining Conversion %s -> %s", src, dest)
 
     try:
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        tmp = audio.export(dest,
-                           format=job.format,
-                           bitrate=job.bitrate,
-                           codec=job.codec)
-        tmp.close()
+        if not args.dryrun:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = audio.export(dest,
+                               format=job.format,
+                               bitrate=job.bitrate,
+                               codec=job.codec)
+            tmp.close()
     except Exception as e:
         logger.error("Failed writing %s: %s", dest, e)
         return f"{src} -> {dest} failed writing {e}"
@@ -168,7 +170,8 @@ def processArgs():
     parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
     parser.add_argument('--overwrite', '-o', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
     parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]", help="Number of concurrent jobs to use" + _def)
-    parser.add_argument('--progerss', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
+    parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
+    parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help='Increase the verbosity')
 
     parser.add_argument('srcdir',  type=pathlib.Path, help='Root input directory')
