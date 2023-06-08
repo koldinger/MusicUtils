@@ -6,6 +6,7 @@ import logging
 import sys
 import os
 import time
+from pprint import pprint
 from multiprocessing import Pool
 from collections import namedtuple
 
@@ -23,7 +24,8 @@ defaults = {
     "aac":  DefParams("aac", "ipod", "128k", ".m4a", None),
     "ogg":  DefParams("libvorbis", "ogg", None, ".ogg", None),
     "opus": DefParams("opus", "opus", None, ".opus", None),
-    "alac": DefParams("alac", "ipod", None, ".alac", None)
+    "alac": DefParams("alac", "ipod", None, ".alac", None),
+    "flac": DefParams("flac", "flac", None, ".flac", None)
 }
 
 formats = {
@@ -32,11 +34,15 @@ formats = {
     "audio/x-m4a": "mp4"
     }
 
-suffixes = {"flac": ".flac",
+suffixes = {
+            "flac": ".flac",
             "ipod": ".m4a",
             "mp4" : ".mp4",
             "mp3" : ".mp3",
-            "ogg" : ".ogg"}
+            "ogg" : ".ogg",
+            "alac": ".alac",
+            "ape": ".ape"
+            }
 
 bitrates = {
             "mp3": "320k",
@@ -168,7 +174,7 @@ def processArgs():
     parser.add_argument('--suffix', '-s', dest='suffix', type=str, default=None, help='Suffix to use')
     parser.add_argument('--copytags', '-t', dest='copytags', action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
     parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
-    parser.add_argument('--overwrite', '-o', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
+    parser.add_argument('--overwrite', '-O', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
     parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]", help="Number of concurrent jobs to use" + _def)
     parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
     parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
