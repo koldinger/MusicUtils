@@ -7,6 +7,7 @@ import sys
 import os
 import pprint
 import traceback
+import re
 
 from functools import cache
 
@@ -33,9 +34,13 @@ def backupFile(path):
 def makeTagValues(tags):
     ret = {}
     if tags:
-        tags = map(lambda x: map(lambda y: y.strip(), x.split("=")), tags)
-        for x, y in tags:
-            ret.setdefault(x, set()).add(y)
+        tags = map(lambda x: map(lambda y: y.strip(), x.split("=", 1)), tags)
+        try:
+            for x, y in tags:
+                ret.setdefault(x, set()).add(y)
+        except ValueError as e:
+            print("Invalid tag format")
+            raise e
     return ret
 
 def isAudio(path):
