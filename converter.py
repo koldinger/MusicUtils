@@ -82,7 +82,6 @@ bitrates = {
 
 logger = None
 args = None
-pbar = None
 
 def initLogging(verbosity):
     progressbar.streams.wrap_stderr()
@@ -140,12 +139,11 @@ def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.P
     return jobs
 
 def convert(job):
-    global pbar
     src = job.source
     dest = job.dest
     logger = job.logger
 
-    print(f"Running job {src} ({src.suffix}) to {dest} ({dest.suffix}, {job.format}") 
+    #print(f"Running job {src} ({src.suffix}) to {dest} ({dest.suffix}, {job.format})") 
 
     try:
         times = src.stat()
@@ -153,7 +151,6 @@ def convert(job):
         audio = AudioSegment.from_file(src, inputtypes[src.suffix])
         logger.debug("Loaded %s", src)
     except Exception as e:
-        logger.error("Failed loading %s: %s", src, e)
         print(f"Failed loading {src} {e}")
         return f"{src} -> {dest} failed loading: {e}"
 
@@ -168,7 +165,6 @@ def convert(job):
                                codec=job.codec)
             tmp.close()
     except Exception as e:
-        logger.error("Failed writing %s: %s", dest, e)
         print(f"Failed writing {dest}: {e}")
         return f"{src} -> {dest} failed writing {e}"
 
@@ -181,13 +177,17 @@ def convert(job):
                     dstTags[tag] = tags[tag]
             dstTags.save()
         except Exception as e:
-            logger.error("Caught exception copying tags for %s -> %s: %s", src.name, dest, e)
+            return f"{src} -> {dest} failed copying tags {e}"
 
     if args.copytime:
-        logger.debug("Setting times for %s to %s, %s", dest, time.ctime(times.st_atime), time.ctime(times.st_mtime))
-        os.utime(dest, times=(times.st_atime, times.st_mtime))
+        try:
+            logger.debug("Setting times for %s to %s, %s", dest, time.ctime(times.st_atime), time.ctime(times.st_mtime))
+            os.utime(dest, times=(times.st_atime, times.st_mtime))
+        except Exception as e:
+            return f"{src} -> {dest} failed copying time {e}"
 
     logger.debug("Completed conversion %s -> %s", src, dest)
+    return None
 
 def processArgs():
     _def = ' (default: %(default)s)'
@@ -215,7 +215,7 @@ def processArgs():
     return args
 
 def main():
-    global logger, args, pbar
+    global logger, args
 
     args = processArgs()
     logger = initLogging(args.verbose)
@@ -238,9 +238,11 @@ def main():
         pbar.start()
 
     with Pool(args.workers) as pool:
-        for _ in pool.imap_unordered(convert, jobs):
+        for error in pool.imap_unordered(convert, jobs):
             if pbar:
                 pbar += 1
+            if error:
+                logger.error(error)
 
     if pbar:
         pbar.finish()
