@@ -5,6 +5,8 @@ import pathlib
 import magic
 import pprint
 
+from functools import cache
+
 import music_tag
 
 def isAudio(path):
@@ -67,6 +69,18 @@ def splitByDisk(data):
     
     return disks
 
+def printDetails(details):
+    names = {}
+    for v in details.keys():
+        names[v] = fmtTuple(v) + ": "
+    maxLen = max(map(len, (names.values())))
+
+    for v in details.keys():
+        lines = pprint.pformat(details[v], compact=True, width=120).splitlines()
+        report(f"    {names[v]:{maxLen}} {lines[0]}")
+        for l in lines[1:]:
+            print(" " * (maxLen + 4), l) 
+
 
 
 album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork' ]
@@ -85,8 +99,7 @@ def checkConsistency(d, details):
                 #print(tagVals.keys(), fmtTuples(tagVals.keys()))
                 report(f"Inconsistent {t} values in {d}: {fmtTuples(tagVals.keys())}")
                 if details:
-                    for v in tagVals.keys():
-                        report(f"    {v}: {tagVals[v]}")
+                    printDetails(tagVals)
 
             if missing:
                 if len(missing) == len(data):
@@ -111,11 +124,10 @@ def checkConsistency(d, details):
             for tag in disk_tags:
                 tagVals, missing = collectAndCheck(t, d)
                 if len(tagVals) > 1:
-                    print(tagVals.keys(), fmtTuples(tagVals.keys()))
+                    report(tagVals.keys(), fmtTuples(tagVals.keys()))
                     report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
                     if details:
-                        for v in tagVals.keys():
-                            print(f"    {v}: {tagVals[v]}")
+                        printDetails(tagVals)
                 if missing:
                     if len(missing) == len(d):
                         report(f"Missing tag {t} in all files for disk {disk}")
@@ -148,6 +160,7 @@ def report(string):
         __first = False
     print(string)
 
+@cache
 def fmtTuple(x):
     if len(x) == 1:
         return x[0]
