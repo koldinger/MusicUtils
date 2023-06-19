@@ -52,7 +52,7 @@ defaults = {
     "mp3":  DefParams("mp3", "mp3", "192k", ".mp3", None),
     "aac":  DefParams("aac", "ipod", "128k", ".m4a", None),
     "ogg":  DefParams("libvorbis", "ogg", None, ".ogg", None),
-    "opus": DefParams("opus", "opus", None, ".opus", None),
+    "opus": DefParams("libopus", "opus", None, ".opus", None),
     "alac": DefParams("alac", "ipod", None, ".alac", None),
     "flac": DefParams("flac", "flac", None, ".flac", None)
 }
