@@ -30,6 +30,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import os
 import os.path
 import sys
 import logging
@@ -37,8 +38,7 @@ import pathlib
 import re
 import unicodedata
 import shutil
-import operator
-import functools
+from collections import Counter
 
 import colorlog
 import unidecode
@@ -53,14 +53,17 @@ ACTION_MOVE=2
 ACTION_COPY=3
 ACTION_SYMLINK=4
 
+bases_default = os.environ.get('REORG_TYPES', '').split()
+base_default = os.environ.get('REORG_BASE', '.')
+
 def processArgs():
     _def = ' (default: %(default)s)'
 
     parser = argparse.ArgumentParser(description="Reorganize music files", add_help=True)
 
-    parser.add_argument('--base', '-b', dest='base', default='.',                                                   help='Base destination directory' + _def)
-    parser.add_argument('--split', '-s', dest='split', default=False, action=argparse.BooleanOptionalAction,        help='Split by type' + _def)
-    parser.add_argument('--typebase', '-B', dest='bases', default=[], nargs='*',                                    help='Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3')
+    parser.add_argument('--base', '-b', type=pathlib.Path, dest='base', default=pathlib.Path(base_default),         help='Base destination directory' + _def)
+    parser.add_argument('--types', '-t', dest='split', default=True, action=argparse.BooleanOptionalAction,         help='Split by type' + _def)
+    parser.add_argument('--typebase', '-B', dest='bases', default=bases_default, nargs='*',                         help='Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3')
 
     action = parser.add_mutually_exclusive_group()
     action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,      help='Move (rename) the files')
@@ -81,13 +84,13 @@ def processArgs():
     parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,    help='Use classical naming')
     parser.add_argument('--surname', '-S', dest='surname', default=True, action=argparse.BooleanOptionalAction,     help='Use the sorted name (ie, surname) of the composer if available' + _def)
     parser.add_argument('--length', dest='maxlength', default=75, type=int,                                         help='Maximum length of file names' + _def)
-    parser.add_argument('--clean', '-c', dest='cleanup', default=False,                                             help='Cleanup empty directories and dragged files when done' + _def)
+    parser.add_argument('--clean', '-c', dest='cleanup', default=False, action=argparse.BooleanOptionalAction,      help='Cleanup empty directories and dragged files when done' + _def)
     parser.add_argument('--ignore-case', '-I', dest='ignorecase', default=False,  action=argparse.BooleanOptionalAction,
                                                                                                                     help='Ignore case when determining if target exists' + _def)
 
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,                               help='Increase the verbosity')
 
-    parser.add_argument('files', nargs='*', default=['.'], help='List of files/directories to reorganize')
+    parser.add_argument('files', nargs='*', type=pathlib.Path, default=[pathlib.Path('.')], help='List of files/directories to reorganize')
 
     args = parser.parse_args()
     return args
@@ -256,8 +259,8 @@ def actionName():
 
 def renameFile(f, tags, dragfiles=[], dirname=None):
     action = actionName()
-    dest = makeName(f, tags, dirname)
     try:
+        dest = makeName(f, tags, dirname)
         if dest.exists():
             if not f.samefile(dest):
                 log.warning(f"{dest} exists, skipping ({f})")
@@ -274,6 +277,9 @@ def renameFile(f, tags, dragfiles=[], dirname=None):
 
         return dest
     except NotAudioException as e:
+        log.warning(e)
+        return None
+    except AttributeError as e:
         log.warning(e)
         return None
     except FileExistsError as e:
@@ -329,16 +335,30 @@ def reorgDir(d):
         if args.classical and composers:
             composerStr = makeComposerString(composers)
 
-        destdirs = set()
+        destdirs = Counter()
         for f in audio:
             dest = renameFile(f[0], f[1], dragfiles=dragfiles, dirname=composerStr)
-            destdirs.add(dest.parent)
+            if dest:
+                destdirs[dest.parent] += 1
 
         if len(destdirs) > 1:
-            log.warning(f"Not all files from {d} went to the same directory: {list(map(str, destdirs))}")
+            log.warning(f"Not all files from {d} went to the same directory: ")
+            for i in destdirs:
+                log.warning(f"    {i}: {destdirs[i]} file(s)")
 
         for f in dirs:
             reorgDir(f)
+
+        if args.cleanup:
+            if dragfiles:
+                log.info("Removing dragged files: %s", " ".join(dragfiles))
+                if not args.test:
+                    map(pathlib.unlink, dragfiles)
+            if not any(d.iterdir()):
+                log.info("Removing empty directory %s", d)
+                if not args.test:
+                    d.rmdir()
+
     except Exception as e:
         log.warning(f"Caught exception processing {name}: {e}")
         log.exception(e)
@@ -375,13 +395,15 @@ args = processArgs()
 log = initLogging()
 
 if args.split:
+    # Create a dict of {codec: path, ...} from array [codec=path, codec=path, ...]
     bases = dict(map(lambda y: [y[0].lower(), y[1]], map(lambda x: x.split("="), args.bases)))
 else:
+    # Don't create the list, allow the default base dir to be used
     bases = {}
 
-for name in args.files:
+for p in args.files:
     try:
-        p = pathlib.Path(name)
+        #p = pathlib.Path(name)
         if not p.exists():
             log.error(f"{name} doesn't exist")
         elif p.is_dir():
