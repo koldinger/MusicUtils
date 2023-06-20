@@ -38,7 +38,7 @@ from functools import cache, partial
 
 import magic
 import music_tag
-from termcolor import cprint
+from termcolor import cprint, colored
 
 # FIXME: These should be extract from music_tag
 VALID_TAGS= sorted([
@@ -86,7 +86,7 @@ def isAudio(path):
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n" +\
              f"Valid tags are: {', '.join(VALID_TAGS)}"
-           
+
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories", epilog=epilog)
     parser.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
     parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
@@ -121,7 +121,7 @@ def processFile(file, tags, delete, preserve, append, dryrun):
     if not isAudio(file):
         print(f"{file} isn't an audio file")
         return
-    qprint(f"Processing file {file}")
+    qprint(colored(f"Processing file {file}", "green"))
     data = music_tag.load_file(file)
     updated = False
 
@@ -137,8 +137,8 @@ def processFile(file, tags, delete, preserve, append, dryrun):
                     newvals = list(values.union(data[tag].values))
                 else:
                     newvals = list(values)
-                qprint(f"    Setting tag {tag} to {newvals}")
-                data[tag] = list(newvals)
+                qprint(f"    Setting tag {tag.upper()} to {newvals}")
+                data[tag.upper()] = list(newvals)
                 updated = True
             #else:
             #    qprint(f"    Not changing tag {tag}.  Value already in tags")
@@ -165,14 +165,15 @@ def printFile(file, tags, alltags, details):
     cprint(f"File: {file}", "green")
     data = music_tag.load_file(file)
 
-    for tag in sorted(data.tags()):
-        if tags and not tag.upper() in tags and not alltags:
+    for tag in map(str.upper, sorted(data.tags())):
+        tag = tag.upper()
+        if tags and not tag in tags and not alltags:
             continue
         if tag.startswith('#') and not (alltags or details):
             continue
         try:
             if data[tag] or alltags:
-                print(f"{tag.upper():27}: {data[tag]}")
+                print(f"{tag:27}: {data[tag]}")
         except Exception as e:
             cprint(f"Caught exception: {e}", 'red')
 
@@ -188,7 +189,7 @@ def main():
     if args.quiet:
         beQuiet = True
     if args.print or not (args.tags or args.delete):
-        printtags = flatten(args.print)
+        printtags = list(map(str.upper, flatten(args.print)))
         for f in args.files:
             printFile(f, printtags, args.alltags, args.details)
     else:
