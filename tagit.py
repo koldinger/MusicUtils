@@ -62,7 +62,6 @@ class TagArgument:
             raise argparse.ArgumentTypeError(f"Invalid tag name {tag}")
 
 def makeTagArgument(tag, value):
-    print(f"Making {tag}={value}")
     return TagArgument(f"{tag}={value}")
 
 def backupFile(path):
