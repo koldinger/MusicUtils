@@ -34,11 +34,20 @@ import pathlib
 import shutil
 import os
 
-from functools import cache
+from functools import cache, partial
 
 import magic
 import music_tag
 from termcolor import cprint
+
+# FIXME: These should be extract from music_tag
+VALID_TAGS= sorted([
+    "ACOUSTIDFINGERPRINT", "ACOUSTIDID", "ALBUM", "ALBUMARTIST", "ALBUMARTISTSORT", "ALBUMSORT", "ARTIST", "ARTISTSORT", "ARTWORK",
+    "COMMENT", "COMPILATION", "COMPOSER", "COMPOSERSORT", "DISCNUMBER", "DISCSUBTITLE", "GENRE", "ISRC", "KEY", "LYRICS", "MEDIA",
+    "MOVEMENT", "MOVEMENTNUMBER", "MOVEMENTTOTAL", "MUSICBRAINZALBUMARTISTID", "MUSICBRAINZALBUMID", "MUSICBRAINZARTISTID",
+    "MUSICBRAINZDISCID", "MUSICBRAINZORIGINALALBUMID", "MUSICBRAINZORIGINALARTISTID", "MUSICBRAINZRECORDINGID", "MUSICBRAINZRELEASEGROUPID",
+    "MUSICBRAINZTRACKID", "MUSICBRAINZWORKID", "MUSICIPFINGERPRINT", "MUSICIPPUID", "SUBTITLE", "TITLESORT", "TOTALDISCS",
+    "TOTALTRACKS", "TRACKNUMBER", "TRACKTITLE", "WORK", "YEAR" ])
 
 class TagArgument:
     tag   = None
@@ -48,7 +57,13 @@ class TagArgument:
         self.tag = tag.strip()
         self.value = value.strip()
         if self.tag.startswith('#'):
-            raise ValueError("Cannot set readonly tag {tag}")
+            raise argparse.ArgumentTypeError(f"Cannot set readonly tag {tag}")
+        if not self.tag.upper() in VALID_TAGS:
+            raise argparse.ArgumentTypeError(f"Invalid tag name {tag}")
+
+def makeTagArgument(tag, value):
+    print(f"Making {tag}={value}")
+    return TagArgument(f"{tag}={value}")
 
 def backupFile(path):
     bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
@@ -70,8 +85,11 @@ def isAudio(path):
         return False
 
 def parseArgs():
-    parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories")
-    parser.add_argument("--tags", "-t",     type=TagArgument, action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
+    epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n" +\
+             f"Valid tags are: {', '.join(VALID_TAGS)}"
+           
+    parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories", epilog=epilog)
+    parser.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
     parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
     parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
@@ -80,6 +98,12 @@ def parseArgs():
     parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print)")
+
+    group = parser.add_argument_group("Tags")
+    for arg in VALID_TAGS:
+        partialFunc = partial(makeTagArgument, arg)
+        group.add_argument(f"--{arg}", nargs=1, dest="tags", type=partialFunc, action='append', help=argparse.SUPPRESS)   #f"Set the {arg} tag")
+
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
 
     return parser.parse_args()
@@ -111,7 +135,7 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         try:
             if values != set(data[tag].values):
                 if append:
-                    newvals = values.union(data[tag].values)
+                    newvals = list(values.union(data[tag].values))
                 else:
                     newvals = list(values)
                 qprint(f"    Setting tag {tag} to {newvals}")
