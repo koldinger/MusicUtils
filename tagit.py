@@ -32,57 +32,52 @@
 import argparse
 import pathlib
 import shutil
-import sys
 import os
-import pprint
-import traceback
-import re
 
 from functools import cache
 
 import magic
 import music_tag
-from termcolor import colored, cprint
+from termcolor import cprint
 
-class PrintOnce:
-    def __init__(self, message):
-        self.message = message
-        self.first = True
-
-    def print(self):
-        if self.first:
-            print(self.message)
-            self.first = False
+class TagArgument:
+    tag   = None
+    value = None
+    def __init__(self, string):
+        tag, value = string.split("=", 1)
+        self.tag = tag.strip()
+        self.value = value.strip()
+        if self.tag.startswith('#'):
+            raise ValueError("Cannot set readonly tag {tag}")
 
 def backupFile(path):
     bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
-    print("Backing up {} to {}".format(path, bupPath))
+    print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
 
 
 def makeTagValues(tags):
     ret = {}
     if tags:
-        tags = map(lambda x: map(lambda y: y.strip(), x.split("=", 1)), tags)
-        try:
-            for x, y in tags:
-                ret.setdefault(x, set()).add(y)
-        except ValueError as e:
-            print("Invalid tag format")
-            raise e
+        for t in tags:
+            ret.setdefault(t.tag, set()).add(t.value)
     return ret
 
 def isAudio(path):
-    return magic.from_file(str(path), mime=True).startswith('audio/')
+    try:
+        return magic.from_file(str(path), mime=True).startswith('audio/')
+    except:
+        return False
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories")
-    parser.add_argument("--tags", "-t",     type=str,  action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
+    parser.add_argument("--tags", "-t",     type=TagArgument, action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
     parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
     parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
     parser.add_argument("--print", "-P",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print current tags (no changes made)")
-    parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of if they exist")
+    parser.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
+    parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print)")
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
@@ -96,33 +91,38 @@ def flatten(l):
 
 @cache
 def readfile(name):
-    with open(x, "rb") as f:
+    with open(name, "rb") as f:
         return f.read()
 
-def processFile(f, tags, delete, preserve, append, dryrun):
-    if not isAudio(f):
-        print(f"{f} isn't an audio file")
+def processFile(file, tags, delete, preserve, append, dryrun):
+    if not isAudio(file):
+        print(f"{file} isn't an audio file")
         return
-    qprint(f"Processing file {f}")
-    data = music_tag.load_file(f)
+    qprint(f"Processing file {file}")
+    data = music_tag.load_file(file)
     updated = False
 
-    times = f.stat()
+    times = file.stat()
     for tag in tags:
         if tag.lower() == 'artwork':
             values = map(readfile, tags[tag])
         else:
             values = tags[tag]
-        if values != set(data[tag].values):
-            if append:
-                newvals = values.union(data[tag].values)
-            else:
-                newvals = list(values)
-            qprint(f"    Setting tag {tag} to {newvals}")
-            data[tag] = list(newvals)
-            updated = True
-        #else:
-        #    qprint(f"    Not changing tag {tag}.  Value already in tags")
+        try:
+            if values != set(data[tag].values):
+                if append:
+                    newvals = values.union(data[tag].values)
+                else:
+                    newvals = list(values)
+                qprint(f"    Setting tag {tag} to {newvals}")
+                data[tag] = list(newvals)
+                updated = True
+            #else:
+            #    qprint(f"    Not changing tag {tag}.  Value already in tags")
+        except KeyError as k:
+            cprint(f'Invalid tag name {k}', 'red')
+        except ValueError as v:
+            cprint(v, 'red')
 
     if delete:
         for tag in delete:
@@ -134,17 +134,23 @@ def processFile(f, tags, delete, preserve, append, dryrun):
     if not dryrun and updated:
         data.save()
         if preserve:
-            os.utime(f, times=(times.st_atime, times.st_mtime))
+            os.utime(file, times=(times.st_atime, times.st_mtime))
 
-def printFile(f, all):
-    if not isAudio(f):
+def printFile(file, alltags, details):
+    if not isAudio(file):
         return
-    cprint(f"File: {f}", "green")
-    data = music_tag.load_file(f)
+    cprint(f"File: {file}", "green")
+    data = music_tag.load_file(file)
 
-    for t in sorted(data.tags()):
-        if data[t] or all:
-            print("{:27}: {}".format(t.upper(), data[t]))
+    for tag in sorted(data.tags()):
+        if tag.startswith('#') and not (alltags or details):
+            continue
+        try:
+            if data[tag] or alltags:
+                print(f"{tag.upper():27}: {data[tag]}")
+        except Exception as e:
+            cprint(f"Caught exception: {e}", 'red')
+
 
 beQuiet = False
 def qprint(*args):
@@ -158,7 +164,7 @@ def main():
         beQuiet = True
     if args.print or not (args.tags or args.delete):
         for f in args.files:
-            printFile(f, args.alltags)
+            printFile(f, args.alltags, args.details)
     else:
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
