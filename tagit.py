@@ -92,7 +92,7 @@ def parseArgs():
     parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
     parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
-    parser.add_argument("--print", "-P",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print current tags (no changes made)")
+    parser.add_argument("--print", "-P",    type=str, action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
     parser.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
     parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
@@ -159,13 +159,15 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
-def printFile(file, alltags, details):
+def printFile(file, tags, alltags, details):
     if not isAudio(file):
         return
     cprint(f"File: {file}", "green")
     data = music_tag.load_file(file)
 
     for tag in sorted(data.tags()):
+        if tags and not tag.upper() in tags and not alltags:
+            continue
         if tag.startswith('#') and not (alltags or details):
             continue
         try:
@@ -186,8 +188,9 @@ def main():
     if args.quiet:
         beQuiet = True
     if args.print or not (args.tags or args.delete):
+        printtags = flatten(args.print)
         for f in args.files:
-            printFile(f, args.alltags, args.details)
+            printFile(f, printtags, args.alltags, args.details)
     else:
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
