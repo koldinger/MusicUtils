@@ -191,7 +191,9 @@ def main():
     if args.quiet:
         beQuiet = True
     if args.print or not (args.tags or args.delete):
-        printtags = list(map(str.upper, flatten(args.print)))
+        printtags = []
+        if args.print is not None:
+            printtags = list(map(str.upper, flatten(args.print)))
         for f in args.files:
             printFile(f, printtags, args.alltags, args.details)
     else:
