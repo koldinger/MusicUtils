@@ -123,14 +123,23 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
         frTags = music_tag.load_file(fromPath)
         toTags = music_tag.load_file(toPath)
 
-
         if not tags:
-            tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
+            #tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
+            tags = list(filter(lambda x: not x.startswith('#') and not x in skiptags, set(toTags.tags()).union(frTags.tags())))
 
         for tag in tags:
             try:
                 if not tag in frTags:
+                    if delete and tag in toTags:
+                        header.print()
+                        deleted.append(tag)
+                        if not short:
+                            print(f"\tDeleting  {tag}")
+                        del toTags[tag]
+                        nDeleted += 1
+                        changed = True
                     continue
+
                 frValue = frTags[tag]
                 # Get the "to" value
                 # if the value is unparseable, just ignore it
@@ -157,25 +166,17 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                         replaced.append(tag)
                         nReplaced += 1
                         if not short:
-                            print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
+                            print(f"\tReplacing {tag:25}: {toValue} -> {frValue}")
                     else:
                         header.print()
                         added.append(tag)
                         nAdded += 1
                         if not short:
-                            print("\tAdding    {:25}: {}".format(tag, frValue))
+                            print(f"\tAdding    {tag:25}: {frValue}")
                     toTags[tag] = frValue
                     changed = True
-                elif delete and toValue:
-                    header.print()
-                    deleted.append(tag)
-                    if not short:
-                        print("\tDeleting  {:25}".format(tag))
-                    del toTags[tag]
-                    nDeleted += 1
-                    changed = True
             except Exception as e:
-                print(colored("Error:", "red") + " Failed copying tag {} from {} to {}".format(colored(tag, "red"), colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
+                print(colored("Error:", "red") + f" Failed copying tag {colored(tag, 'red')} from {colored(fromPath, 'yellow')} to {colored(toPath, 'yellow')}")
                 print(str(e))
                 # traceback.print_exc()
                 nErrors += 1
@@ -183,14 +184,13 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
         if short:
             header.print()
             if added:
-                print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
+                print(f"{colored('Added', 'cyan'):9}: {pprint.pformat(added, compact=True, width=132)}")
             if replaced:
-                print("{:9}: {}".format(colored("Replaced", "cyan"), pprint.pformat(replaced, compact=True, width=132)))
+                print(f"{colored('Replaced', 'cyan'):9}: {pprint.pformat(replaced, compact=True, width=132)}")
             if deleted:
-                print("{:9}: {}".format(colored("Deleted", "cyan"), pprint.pformat(deleted, compact=True, width=132)))
+                print(f"{colored('Deleted', 'cyan'):9}: {pprint.pformat(deleted, compact=True, width=132)}")
             if not (added or deleted or replaced):
                 print(colored("Nothing changed", "cyan"))
-            print()
 
         if changed and not dryrun:
             toTags.save()
