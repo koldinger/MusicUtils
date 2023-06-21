@@ -35,6 +35,7 @@ import shutil
 import os
 
 from functools import cache, partial
+from collections import Counter
 
 import magic
 import music_tag
@@ -98,7 +99,8 @@ def parseArgs():
     parser.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
     parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
-    parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print)")
+    parser.add_argument("--stats", "-s",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print stats")
+    parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
 
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:
@@ -119,6 +121,8 @@ def readfile(name):
     with open(name, "rb") as f:
         return f.read()
 
+stats = Counter()
+
 def processFile(file, tags, delete, preserve, append, dryrun):
     if not isAudio(file):
         print(f"{file} isn't an audio file")
@@ -127,6 +131,7 @@ def processFile(file, tags, delete, preserve, append, dryrun):
     data = music_tag.load_file(file)
     updated = False
 
+    stats['processed'] += 1
     times = file.stat()
     for tag in tags:
         if tag.lower() == 'artwork':
@@ -134,13 +139,16 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         else:
             values = tags[tag]
         try:
+            curValues = set(data[tag].values)
+            action = 'changed' if curValues else 'added'
             if values != set(data[tag].values):
                 if append:
-                    newvals = list(values.union(data[tag].values))
+                    newvals = list(values.union(curValues))
                 else:
                     newvals = list(values)
                 qprint(f"    Setting tag {tag.upper()} to {newvals}")
                 data[tag.upper()] = list(newvals)
+                stats[action] += 1
                 updated = True
             #else:
             #    qprint(f"    Not changing tag {tag}.  Value already in tags")
@@ -155,7 +163,10 @@ def processFile(file, tags, delete, preserve, append, dryrun):
                 qprint(f"    Removing tag {tag}")
                 data.remove_tag(tag)
                 updated = True
+                stats['deleted'] += 1
 
+    if updated:
+        stats['updated'] += 1
     if not dryrun and updated:
         data.save()
         if preserve:
@@ -201,6 +212,9 @@ def main():
         delete = flatten(args.delete)
         for f in args.files:
             processFile(f, tags, delete, args.preserve, args.append, args.dryrun)
+        if args.stats:
+            print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']}")
+
 
 if __name__ == '__main__':
     main()
