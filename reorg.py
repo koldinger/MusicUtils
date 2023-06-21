@@ -286,6 +286,9 @@ def renameFile(file, tags, dragfiles=[], dirname=None):
     action = actionName()
     try:
         dest = makeName(file, tags, dirname)
+        if file.expanduser().absolute() == dest.expanduser().absolute():
+            return dest
+
         if dest.exists():
             if not file.samefile(dest):
                 log.warning(f"{dest} exists, skipping ({file})")
