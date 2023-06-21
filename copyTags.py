@@ -181,7 +181,7 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                 # traceback.print_exc()
                 nErrors += 1
 
-        if short:
+        if short and (added or replaced or deleted):
             header.print()
             if added:
                 print(f"{colored('Added', 'cyan'):9}: {pprint.pformat(added, compact=True, width=132)}")
@@ -189,8 +189,8 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
                 print(f"{colored('Replaced', 'cyan'):9}: {pprint.pformat(replaced, compact=True, width=132)}")
             if deleted:
                 print(f"{colored('Deleted', 'cyan'):9}: {pprint.pformat(deleted, compact=True, width=132)}")
-            if not (added or deleted or replaced):
-                print(colored("Nothing changed", "cyan"))
+            #if not (added or deleted or replaced):
+            #   print(colored("Nothing changed", "cyan"))
 
         if changed and not dryrun:
             toTags.save()
