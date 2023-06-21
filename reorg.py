@@ -42,6 +42,7 @@ from collections import Counter
 import colorlog
 import unidecode
 import music_tag
+import magic
 
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
@@ -222,8 +223,14 @@ def makeDName(file, tags, dirname=None):
     log.debug(f"Dir: {file.parent} -> {base}")
     return base
 
+
+def isAudio(file):
+    return magic.from_file(file, mime=True).startswith("audio")
+
 def getTags(file):
     log.debug(f"Getting tags from file {file}")
+    if not isAudio(file):
+        raise NotAudioException(file.resolve())
     try:
         tags = music_tag.load_file(file)
         return tags
