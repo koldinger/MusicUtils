@@ -64,7 +64,7 @@ def matchFiles(srcs, dsts):
     return list(zip(sorted(srcs), sorted(dsts)))
 
 def isAudio(path):
-    return magic.from_file(str(path), mime=True).startswith('audio/')
+    return magic.from_buffer(open(path, "rb").read(2048), mime=True).startswith('audio/')
 
 def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
     #print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
