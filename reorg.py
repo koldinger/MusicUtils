@@ -34,10 +34,11 @@ import os
 import os.path
 import logging
 import pathlib
-import re
 import unicodedata
 import shutil
 from collections import Counter
+
+import regex as re
 
 import colorlog
 import unidecode
@@ -128,7 +129,10 @@ def munge(name):
         name = unicodedata.normalize('NFKC', name)
     if args.ascii:
         name = unidecode.unidecode(name)
-    name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
+    #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~\p{P}]', '', name)
+    #name = re.sub(r'[^\w\s,]', '', name)
+    #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
+    name = re.sub(r'[\p{Punct}\p{Cntrl}]', '', name)
     name = re.sub(r'\s', '_', name)
     name = re.sub(r'_+', '_', name)
     if not args.useArticle:
@@ -225,12 +229,12 @@ def makeDName(file, tags, dirname=None):
 
 
 def isAudio(file):
-    return magic.from_file(file, mime=True).startswith("audio")
+    return magic.from_buffer(open(file, 'rb').read(2048), mime=True).startswith("audio")
 
 def getTags(file):
     log.debug(f"Getting tags from file {file}")
     if not isAudio(file):
-        raise NotAudioException(file.resolve())
+        raise NotAudioException(f"{file.resolve()} is not an audio file")
     try:
         tags = music_tag.load_file(file)
         return tags
@@ -251,7 +255,7 @@ def dragFiles(dragfiles, destdir):
     for file in dragfiles:
         dest = destdir.joinpath(file.name)
         if file.exists() and not dest.exists():
-            log.info(f"{action} {file}\t==>  {dest}")
+            log.log(logging.ACTION, f"{action} {file}\t==>  {dest}")
             doMove(file, dest)
 
 def doMove(src, dest):
@@ -305,10 +309,9 @@ def renameFile(file, tags, dragfiles=[], dirname=None):
             log.debug(f"Not moving {file.name} to {dest.name}.   Change is only in case")
             return dest
 
-        log.info(f"{action} {file}\t==>  {dest}")
+        log.log(logging.ACTION, f"{action} {file}\t==>  {dest}")
 
         doMove(file, dest)
-        dragFiles(dragfiles, dest.parent)
 
         return dest
     except NotAudioException as exc:
@@ -378,6 +381,8 @@ def reorgDir(directory):
         for finfo in audio:
             dest = renameFile(finfo[0], finfo[1], dragfiles=dragfiles, dirname=composerStr)
             if dest:
+                if not dest.parent in destdirs:
+                    dragFiles(dragfiles, dest.parent)
                 destdirs[dest.parent] += 1
 
         if len(destdirs) > 1:
@@ -404,19 +409,25 @@ def reorgDir(directory):
         raise exc
 
 def initLogging():
+    # Create a custom logging attachment
+    logging.ACTION = logging.INFO + 1
+    logging.addLevelName(logging.ACTION, 'ACTION')
+
     handler = colorlog.StreamHandler()
     colors={
         'DEBUG':    'cyan',
         'INFO':     'green',
+        'ACTION':   'cyan,bold',
         'WARNING':  'yellow',
         'ERROR':    'red',
         'CRITICAL': 'red,bg_white',
     }
+
     formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s',
                                           log_colors=colors)
     handler.setFormatter(formatter)
 
-    levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.WARN, logging.ACTION, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, args.verbose)]  # capped to number of levels
 
     logger = colorlog.getLogger('reorg')
