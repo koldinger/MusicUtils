@@ -34,7 +34,7 @@ import pathlib
 import shutil
 import os
 
-from functools import cache, partial
+from functools import lru_cache, partial
 from collections import Counter
 
 import magic
@@ -117,7 +117,7 @@ def flatten(l):
         return [num for sublist in l for num in sublist]
     return l
 
-@cache
+@lru_cache(maxsize=16)
 def readfile(name):
     with open(name, "rb") as f:
         return f.read()
