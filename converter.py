@@ -196,6 +196,7 @@ def processArgs():
 
     parser = argparse.ArgumentParser(description="Convert audio file formats", add_help=True)
 
+    parser.add_argument('--output',  '-o', type=str, choices=defaults.keys(), default='aac', help='List of files/directories to reorganize')
     parser.add_argument('--format', '-f', dest='format', default=None,  help="Output Format" + _def)
     parser.add_argument('--bitrate', '-b', dest='bitrate', type=str, default=None, help='Output bitrate' + _def)
     parser.add_argument('--codec', '-c', dest='codec', type=str, default=None, help='Codec to use')
@@ -210,7 +211,6 @@ def processArgs():
 
     parser.add_argument('srcdir',  type=pathlib.Path, help='Root input directory')
     parser.add_argument('destdir', type=pathlib.Path, help='Root output directory')
-    parser.add_argument('output',  type=str, choices=defaults.keys(), help='List of files/directories to reorganize')
 
     args = parser.parse_args()
     return args
