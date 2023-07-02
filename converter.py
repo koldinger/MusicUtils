@@ -45,7 +45,7 @@ import music_tag
 import progressbar
 from pydub import AudioSegment
 
-Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "params", "logger"])
+Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "params", "logger", "args"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])
 
 defaults = {
@@ -133,7 +133,7 @@ def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.P
         logger.debug("%s -> %s", src, dest)
         if not dest.exists() or overwrite:
             # TODO: Add the parameters argument.
-            jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger))
+            jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger, args))
         else:
             logger.debug("Skipping %s.  Target %s exists", src, dest)
     return jobs
@@ -142,6 +142,7 @@ def convert(job):
     src = job.source
     dest = job.dest
     logger = job.logger
+    args = job.args
 
     #print(f"Running job {src} ({src.suffix}) to {dest} ({dest.suffix}, {job.format})") 
 
@@ -166,7 +167,7 @@ def convert(job):
             tmp.close()
     except Exception as e:
         print(f"Failed writing {dest}: {e}")
-        return f"{src} -> {dest} failed writing {e}"
+        return f"{src} -> {dest} failed writing: {e}"
 
     if args.copytags:
         try:
@@ -177,7 +178,7 @@ def convert(job):
                     dstTags[tag] = tags[tag]
             dstTags.save()
         except Exception as e:
-            return f"{src} -> {dest} failed copying tags {e}"
+            return f"{src} -> {dest} failed copying tags: {e}"
 
     if args.copytime:
         try:
@@ -191,7 +192,7 @@ def convert(job):
 
 def processArgs():
     _def = ' (default: %(default)s)'
-    processors = len(os.sched_getaffinity(0))
+    processors = os.cpu_count()
 
     parser = argparse.ArgumentParser(description="Convert audio file formats", add_help=True)
 
