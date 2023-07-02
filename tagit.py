@@ -59,11 +59,10 @@ class TagArgument:
     value = None
     def __init__(self, string):
         tag, value = string.split("=", 1)
-        self.tag = tag.strip()
+        self.tag = checkTag(tag.strip())
         self.value = value.strip()
         if self.tag.startswith('#'):
             raise argparse.ArgumentTypeError(f"Cannot set readonly tag {tag}")
-        checkTag(self.tag)
 
 def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
@@ -82,6 +81,7 @@ def makeTagValues(tags):
     return ret
 
 def checkTag(tag):
+    tag = tag.upper()
     if not tag.upper() in VALID_TAGS:
         raise argparse.ArgumentTypeError(f"{tag} is not a valid tag")
     return tag
@@ -122,11 +122,20 @@ def readfile(name):
     with open(name, "rb") as f:
         return f.read()
 
+def checkFile(file):
+    try:
+        if not isAudio(file):
+            print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
+            return False
+    except FileNotFoundError:
+        print(f"{file} not found")
+        return False
+    return True
+
 stats = Counter()
 
 def processFile(file, tags, delete, preserve, append, dryrun):
-    if not isAudio(file):
-        print(f"{file} isn't an audio file")
+    if not checkFile(file):
         return
     qprint(colored(f"Processing file {file}", "green"))
     data = music_tag.load_file(file)
@@ -174,9 +183,9 @@ def processFile(file, tags, delete, preserve, append, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 def removeTags(file, preserve, dryrun):
-    if not isAudio(file):
-        print(f"{file} isn't an audio file")
+    if not checkFile(file):
         return
+    times = file.stat()
     data = music_tag.load_file(file)
     qprint(f"Removing tags from {file}")
     data.remove_all()
@@ -187,7 +196,7 @@ def removeTags(file, preserve, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 def printFile(file, tags, alltags, details):
-    if not isAudio(file):
+    if not checkFile(file):
         return
     cprint(f"File: {file}", "green")
     data = music_tag.load_file(file)
