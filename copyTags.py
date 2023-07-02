@@ -42,6 +42,8 @@ import music_tag
 
 from termcolor import colored
 
+from Utils import isAudio
+
 class PrintOnce:
     def __init__(self, message):
         self.message = message
@@ -57,14 +59,11 @@ def backupFile(path):
     print("Backing up {} to {}".format(path, bupPath))
     shutil.copy2(path, bupPath)
 
-def addTuple(a, b):
-    return tuple(map(sum, zip(a, b)))
+def addTuples(*args):
+    return tuple(map(sum, zip(*args)))
 
 def matchFiles(srcs, dsts):
     return list(zip(sorted(srcs), sorted(dsts)))
-
-def isAudio(path):
-    return magic.from_file(str(path), mime=True).startswith('audio/')
 
 def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
     #print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
@@ -76,7 +75,7 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
         subDst = pathlib.Path(dstDir, i)
         if subDst.is_dir():
             changes2 = copyTree(subSrc, subDst, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
-            changes = addTuple(changes, changes2)
+            changes = addTuples(changes, *changes2)
         elif subDst.exists():
             print("{} is not a directory".format(colored(subDst, "red")))
         else:
@@ -86,7 +85,6 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
 
 
 def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
-    header = PrintOnce("Processing directory: {} into {}".format(colored(srcDir, "cyan"), colored(dstDir, "cyan")))
     srcFiles = filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir())
     dstFiles = filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir())
 
@@ -94,27 +92,99 @@ def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=Fa
 
     pairs = matchFiles(srcFiles, dstFiles)
 
+    if pairs:
+        print(f"Processing directory: {colored(srcDir, 'cyan')} into {colored(dstDir, 'cyan')}")
+
     for files in pairs:
-        header.print()
-        changes =  copyTags(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
-        nChanges = addTuple(nChanges, changes)
+        changes =  copyFile(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
+        nChanges = addTuples(nChanges, changes)
 
     return nChanges
 
-def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=[]):
-    header = PrintOnce("Copying tags from {} to {}".format(colored(fromPath, 'green'), colored(toPath, 'green')))
 
-    nAdded = 0
+def copyTags(frTags, toTags, tags, replace, delete, details=None):
+    """ 
+    Perform the actual copy of tags from one set to another.
+    Arguments:
+        frTags: The set of tags to copy from.   music_tags.MediaInfo
+        toTags: The set of tags to copy to.     music_tags.MediaInfo
+        tags:   A list of tag names to copy.    list[str]
+        replace: Boolean, replace tags if they are in the target.  If false, don't overwrite existing tags
+        delete:  Boolean.  If true, delete tags that exist in toTags (and tags), but not in frTags
+        details: An optional tuple of lists which will be filled.   Contains 4 lists, added, replaced, deleted, and errors
+                Upon return:
+                    added will contain a list of tuples (tagname, newValue)
+                    replaced will contain a list of tuples (tagname, newValue, oldValue)
+                    deleted will contain a list of tuples (tagname, oldValue)
+                    errors will contain a list of tuples (tagname, exception)
+    Returns:
+        A boolean indicating if anything changed
+        A 4-tuple, containg a count of each value number of tags added, replaced, deleted, and errors
+    """
     nReplaced = 0
+    nAdded = 0
     nDeleted = 0
     nErrors = 0
+    changed = False
 
+    if details:
+        (added, replaced, deleted, errors) = details
+
+    for tag in tags:
+        try:
+            frValue = frTags[tag]
+
+            # Get the "to" value
+            # if the value is unparseable, just ignore it
+            try:
+                toValue = toTags[tag]
+            except ValueError:
+                toValue = None
+
+            if frValue:
+                if toValue:
+                    #print(tag, frValue, toValue, type(frValue), type(toValue))
+                    if tag == 'artwork':
+                        # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
+                        if frValue.first.data == toValue.first.data:
+                            continue
+                    elif frValue.values == toValue.values:
+                        continue
+                    if not replace:
+                        continue
+                    if details:
+                        replaced.append((tag, frValue, toValue))
+                    nReplaced += 1
+                else:
+                    if details:
+                        added.append((tag, frValue))
+                    nAdded += 1
+
+                toTags[tag] = frValue
+                changed = True
+            elif delete and toValue:
+                print("Deleting ", tag)
+                if details:
+                    deleted.append((tag, toValue))
+                del toTags[tag]
+                nDeleted += 1
+                changed = True
+        except Exception as exception:
+            if details:
+                errors.append((tag, exception))
+            nErrors += 1
+    return changed, (nAdded, nReplaced, nDeleted, nErrors)
+
+def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=[]):
     added = []
     replaced = []
     deleted = []
+    errors = []
+    results = (added, replaced, deleted, errors)
     changed = False
 
     try:
+        # If requested, backup the original file
         if backup and not dryrun:
             backupFile(toPath)
 
@@ -123,74 +193,35 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
         frTags = music_tag.load_file(fromPath)
         toTags = music_tag.load_file(toPath)
 
-
         if not tags:
-            tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, frTags.tags()))
+            tags = list(filter(lambda x: not x.startswith("#") and not x in skiptags, music_tag.tags()))
 
-        for tag in tags:
-            try:
-                if not tag in frTags:
-                    continue
-                frValue = frTags[tag]
-                # Get the "to" value
-                # if the value is unparseable, just ignore it
-                try:
-                    if tag in toTags:
-                        toValue = toTags[tag]
-                    else:
-                        toValue = None
-                except ValueError:
-                    toValue = None
-
-                if frValue:
-                    if toValue:
-                        #print(tag, frValue, toValue, type(frValue), type(toValue))
-                        if tag == 'artwork':
-                            # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
-                            if frValue.first.data == toValue.first.data:
-                                continue
-                        elif frValue.values == toValue.values:
-                            continue
-                        if not replace:
-                            continue
-                        header.print()
-                        replaced.append(tag)
-                        nReplaced += 1
-                        if not short:
-                            print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
-                    else:
-                        header.print()
-                        added.append(tag)
-                        nAdded += 1
-                        if not short:
-                            print("\tAdding    {:25}: {}".format(tag, frValue))
-                    toTags[tag] = frValue
-                    changed = True
-                elif delete and toValue:
-                    header.print()
-                    deleted.append(tag)
-                    if not short:
-                        print("\tDeleting  {:25}".format(tag))
-                    del toTags[tag]
-                    nDeleted += 1
-                    changed = True
-            except Exception as e:
-                print(colored("Error:", "red") + " Failed copying tag {} from {} to {}".format(colored(tag, "red"), colored(fromPath, 'yellow'), colored(toPath, 'yellow')))
-                print(str(e))
-                # traceback.print_exc()
-                nErrors += 1
+        changed, counts = copyTags(frTags, toTags, tags, replace, delete, results)
+        print(f"{colored('Copying tags from', 'yellow')} {colored(fromPath, 'green')} to {colored(toPath, 'green')}")
 
         if short:
-            header.print()
             if added:
-                print("{:9}: {}".format(colored("Added", "cyan"), pprint.pformat(added, compact=True, width=132)))
+                tags = list(map(lambda x: x[0], added))
+                print(f"{colored('Added', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
             if replaced:
-                print("{:9}: {}".format(colored("Replaced", "cyan"), pprint.pformat(replaced, compact=True, width=132)))
+                tags = list(map(lambda x: x[0], replaced))
+                print(f"{colored('Replaced', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
             if deleted:
-                print("{:9}: {}".format(colored("Deleted", "cyan"), pprint.pformat(deleted, compact=True, width=132)))
+                tags = list(map(lambda x: x[0], deleted))
+                print(f"{colored('Deleted', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
             if not (added or deleted or replaced):
                 print(colored("Nothing changed", "cyan"))
-            print()
+            #print()
+        else:
+            for (tag, value) in added:
+                print("\tAdding    {:25}: {}".format(tag, value))
+            for (tag, frValue, toValue) in replaced:
+                print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
+            for (tag, value) in deleted:
+                print("\tDeleting  {:25}: {}".format(tag, value))
+            for (tag, exception) in errors:
+                print(f"{colored('Error', 'red')} Failed copying tag {colored(tag, 'red')} from {colored(fromPath, 'yellow')} to {colored(toPath, 'yellow')}")
+                print(str(exception))
 
         if changed and not dryrun:
             toTags.save()
@@ -200,8 +231,9 @@ def copyTags(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
         print(colored("Error", "red") + " Error processing file {}".format(colored(fromPath, 'yellow')))
         print(str(e))
         nErrors += 1
+        raise e
 
-    return (int(changed), nAdded, nReplaced, nDeleted, nErrors)
+    return (int(changed), counts[0], counts[1], counts[2], counts[3])
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories")
@@ -230,7 +262,7 @@ def main():
         else:
             nChanges = copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
     else:
-        nChanges = copyTags(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
+        nChanges = copyFile(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
 
     print("Files Changed: {} Tags Added: {} Tags Replaced: {} Tags Deleted: {} Errors: {}".format(*nChanges))
 

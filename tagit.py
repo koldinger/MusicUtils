@@ -40,6 +40,8 @@ import magic
 import music_tag
 from termcolor import cprint, colored
 
+from Utils import isAudio
+
 # FIXME: These should be extract from music_tag
 #VALID_TAGS = sorted([
 #    "ACOUSTIDFINGERPRINT", "ACOUSTIDID", "ALBUM", "ALBUMARTIST", "ALBUMARTISTSORT", "ALBUMSORT", "ARTIST", "ARTISTSORT", "ARTWORK",
@@ -60,8 +62,7 @@ class TagArgument:
         self.value = value.strip()
         if self.tag.startswith('#'):
             raise argparse.ArgumentTypeError(f"Cannot set readonly tag {tag}")
-        if not self.tag.upper() in VALID_TAGS:
-            raise argparse.ArgumentTypeError(f"Invalid tag name {tag}")
+        checkTag(self.tag)
 
 def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
@@ -79,22 +80,22 @@ def makeTagValues(tags):
             ret.setdefault(t.tag, set()).add(t.value)
     return ret
 
-def isAudio(path):
-    try:
-        return magic.from_file(str(path), mime=True).startswith('audio/')
-    except:
-        return False
+def checkTag(tag):
+    if not tag.upper() in VALID_TAGS:
+        raise argparse.ArgumentTypeError(f"{tag} is not a valid tag")
+    return tag
 
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n" +\
              f"Valid tags are: {', '.join(VALID_TAGS)}"
 
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories", epilog=epilog)
-    parser.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='*', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
-    parser.add_argument("--delete", "-d",   type=str,  action='append', nargs='*', help='List of tags to delete.   Ex: --delete artist artistsort')
+    parser.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
+    parser.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
     parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
+    parser.add_argument("--clear", '-C',   type=bool, action=argparse.BooleanOptionalAction, default=False, help='Remove all tags')
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
-    parser.add_argument("--print", "-P",    type=str, action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
+    parser.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
     parser.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
     parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
@@ -161,6 +162,19 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
+def removeTags(file, preserve, dryrun):
+    if not isAudio(file):
+        print(f"{file} isn't an audio file")
+        return
+    data = music_tag.load_file(file)
+    qprint(f"Removing tags from {file}")
+    data.remove_all()
+
+    if not dryrun:
+        data.save()
+        if preserve:
+            os.utime(file, times=(times.st_atime, times.st_mtime))
+
 def printFile(file, tags, alltags, details):
     if not isAudio(file):
         return
@@ -168,7 +182,6 @@ def printFile(file, tags, alltags, details):
     data = music_tag.load_file(file)
 
     for tag in map(str.upper, sorted(data.tags())):
-        tag = tag.upper()
         if tags and not tag in tags and not alltags:
             continue
         if tag.startswith('#') and not (alltags or details):
@@ -190,10 +203,15 @@ def main():
     args = parseArgs()
     if args.quiet:
         beQuiet = True
-    if args.print or not (args.tags or args.delete):
-        printtags = list(map(str.upper, flatten(args.print)))
+    if args.print or not (args.tags or args.delete or args.clear):
+        printtags = None
+        if args.print:
+            printtags = list(map(str.upper, flatten(args.print)))
         for f in args.files:
             printFile(f, printtags, args.alltags, args.details)
+    elif args.clear:
+        for f in args.files:
+            removeTags(f, args.preserve, args.dryrun)
     else:
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
