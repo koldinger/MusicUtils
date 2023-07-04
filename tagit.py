@@ -91,14 +91,19 @@ def parseArgs():
              f"Valid tags are: {', '.join(VALID_TAGS)}"
 
     parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories", epilog=epilog)
-    parser.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
-    parser.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
-    parser.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
-    parser.add_argument("--clear", '-C',   type=bool, action=argparse.BooleanOptionalAction, default=False, help='Remove all tags')
-    parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
-    parser.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
-    parser.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
-    parser.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
+    setGroup = parser.add_argument_group("Tag Setting Options")
+    setGroup.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
+    setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
+    setGroup.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
+    setGroup.add_argument("--clear", '-C',   type=bool, action=argparse.BooleanOptionalAction, default=False, help='Remove all tags')
+    setGroup.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
+
+    printGroup = parser.add_argument_group("Printing Options")
+    printGroup.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
+    printGroup.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
+    printGroup.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
+    printGroup.add_argument("--lists", "-L",    type=bool, action=argparse.BooleanOptionalAction, default=True, help="Print list values separately")
+
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--stats", "-s",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print stats")
     parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
@@ -195,7 +200,7 @@ def removeTags(file, preserve, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
-def printFile(file, tags, alltags, details):
+def printFile(file, tags, alltags, details, printList):
     if not checkFile(file):
         return
     cprint(f"File: {file}", "green")
@@ -208,7 +213,11 @@ def printFile(file, tags, alltags, details):
             continue
         try:
             if data[tag] or alltags:
-                print(f"{tag:27}: {data[tag]}")
+                if printList:
+                    print(f"{tag:27}: {data[tag]}")
+                else:
+                    for i in data[tag].values:
+                        print(f"{tag:27}: {i}")
         except Exception as e:
             cprint(f"Caught exception: {e}", 'red')
 
@@ -228,7 +237,7 @@ def main():
         if args.print:
             printtags = list(map(str.upper, flatten(args.print)))
         for f in args.files:
-            printFile(f, printtags, args.alltags, args.details)
+            printFile(f, printtags, args.alltags, args.details, args.lists)
     elif args.clear:
         for f in args.files:
             removeTags(f, args.preserve, args.dryrun)
