@@ -35,6 +35,7 @@ import pprint
 import tempfile
 import os
 import json
+import time
 
 from collections import Counter
 
@@ -43,7 +44,7 @@ import yaml
 import music_tag
 from termcolor import cprint, colored
 
-from Utils import isAudio
+from Utils import isAudio, addTuples
 
 # FIXME: These should be extract from music_tag
 # VALID_TAGS = sorted([
@@ -70,8 +71,8 @@ def parseArgs():
     parser.add_argument("--edit", "-e", action=argparse.BooleanOptionalAction, default=True, help="Inoke an editor to edit the generated data")
     parser.add_argument("--format", "-f", type=str, choices=['json', 'yaml'], default='yaml', help="Format in which to save/load data")
     parser.add_argument("--promote", "-P", action=argparse.BooleanOptionalAction, default=False, help="Promote common elements to the album or disc level")
-    parser.add_argument("--dry-run", "-n", action=argparse.BooleanOptionalAction, default=False, help="Inoke an editor to edit the generated data")
-    parser.add_argument("--visual", "-V", type=str, default=os.environ.get('EDiTOR', 'nano'), help="Editor to use")
+    parser.add_argument("--dryrun", "-n", action=argparse.BooleanOptionalAction, default=False, help="Inoke an editor to edit the generated data")
+    parser.add_argument("--editor", "-E", type=str, default=os.environ.get('EDITOR', 'nano'), help="Editor to use")
     parser.add_argument(type=pathlib.Path, nargs='+', dest='files', help='Files to change')
 
     return parser.parse_args()
@@ -93,10 +94,10 @@ stats = Counter()
 
 
 def doLoadFiles(files: list[pathlib.Path]):
-    print(files)
-    toCheck = [f for f in files if checkFile(f)]
-    print(toCheck)
-    return map(music_tag.load_file, toCheck)
+    #print(files)
+    toLoad = [f for f in files if checkFile(f)]
+    #print(toCheck)
+    return map(music_tag.load_file, toLoad)
 
 
 def loadFiles(files: list[pathlib.Path]):
@@ -117,6 +118,112 @@ def makeDict(tags):
                     [f for f in tags.keys() if f != 'artwork' and not f.startswith('#')]))
     return d
 
+def copyTags(frTags, toTags, tags, replace, delete, details=None):
+    """
+    Perform the actual copy of tags from one set to another.
+    Arguments:
+        frTags: The set of tags to copy from.   music_tags.MediaInfo
+        toTags: The set of tags to copy to.     music_tags.MediaInfo
+        tags:   A list of tag names to copy.    list[str]
+        replace: Boolean, replace tags if they are in the target.  If false, don't overwrite existing tags
+        delete:  Boolean.  If true, delete tags that exist in toTags (and tags), but not in frTags
+        details: An optional tuple of lists which will be filled.   Contains 4 lists, added, replaced, deleted, and errors
+                Upon return:
+                    added will contain a list of tuples (tagname, newValue)
+                    replaced will contain a list of tuples (tagname, newValue, oldValue)
+                    deleted will contain a list of tuples (tagname, oldValue)
+                    errors will contain a list of tuples (tagname, exception)
+    Returns:
+        A boolean indicating if anything changed
+        A 4-tuple, containg a count of each value number of tags added, replaced, deleted, and errors
+    """
+    nReplaced = 0
+    nAdded = 0
+    nDeleted = 0
+    nErrors = 0
+    changed = False
+
+    if details:
+        (added, replaced, deleted, errors) = details
+
+    for tag in tags:
+        try:
+            frValue = frTags.get(tag, None)
+
+            # Get the "to" value
+            # if the value is unparseable, just ignore it
+            try:
+                toValue = toTags[tag]
+            except ValueError:
+                toValue = None
+
+            if frValue:
+                if toValue:
+                    #print(tag, frValue, toValue, type(frValue), type(toValue))
+                    if tag == 'artwork':
+                        # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
+                        if frValue.first.data == toValue.first.data:
+                            continue
+                    elif frValue == toValue.values:
+                        continue
+                    if not replace:
+                        continue
+                    if details:
+                        replaced.append((tag, frValue, toValue))
+                    nReplaced += 1
+                else:
+                    if details:
+                        added.append((tag, frValue))
+                    nAdded += 1
+
+                toTags[tag] = frValue
+                changed = True
+            elif delete and toValue:
+                print("Deleting ", tag)
+                if details:
+                    deleted.append((tag, toValue))
+                del toTags[tag]
+                nDeleted += 1
+                changed = True
+        except Exception as exception:
+            if details:
+                errors.append((tag, exception))
+            nErrors += 1
+    return changed, (nAdded, nReplaced, nDeleted, nErrors)
+
+def printSummary(details):
+    (added, replaced, deleted, errorrs) = details
+    if added:
+        tags = list(map(lambda x: x[0], added))
+        print(f"{colored('Added', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+    if replaced:
+        tags = list(map(lambda x: x[0], replaced))
+        print(f"{colored('Replaced', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+    if deleted:
+        tags = list(map(lambda x: x[0], deleted))
+        print(f"{colored('Deleted', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+    if not (added or deleted or replaced):
+        print(colored("Nothing changed", "cyan"))
+def doCopy(newData, currentData, replace, delete):
+    allTags = filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags())
+    nChanged = 0
+    results = []
+    for file in currentData:
+        details = ([], [], [], [])
+
+        print(f"Copying tags to {file.filename.name}")
+        pprint.pprint(newData)
+        try:
+            new = newData[file.filename.name]
+            changed, stats = copyTags(new, file, allTags, replace, delete, details=details)
+            nChanged += changed
+            results.append(stats)
+            printSummary(details)
+        except KeyError as e:
+            print(f"Tags for {file.filename} not found.")
+    summary = addTuples(*results)
+    print(summary)
+
 
 def main():
     global beQuiet
@@ -135,13 +242,18 @@ def main():
                 os.system(f"{args.editor} {temp.name}")
                 try:
                     temp.seek(0)
-                    newData = yaml.load(temp, yaml.SafeLoader)
+                    newData = yaml.load(open(temp.name, "r"), yaml.SafeLoader)
+                    pprint.pprint(newData)
                     loaded = True
-                except yaml.YamlError as y:
+                except yaml.YAMLError as y:
                     print(f"Error: {y}")
                     loaded = True  #
         else:
             newData = allData
+        doCopy(newData, currentData, args.replace, args.delete)
+        if not args.dryrun:
+            for i in currentData:
+                i.save()
         if args.save:
             if args.format == 'json':
                 json.dump(newData, args.save, indent=4)
