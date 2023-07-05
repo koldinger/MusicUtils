@@ -58,7 +58,8 @@ def parseArgs():
     parser.add_argument("--load", "-l", type=argparse.FileType('r'), default=None, help="Load the generated tag data from a file")
     parser.add_argument("--edit", "-e", action=argparse.BooleanOptionalAction, default=True, help="Inoke an editor to edit the generated data")
     parser.add_argument("--format", "-f", type=str, choices=['json', 'yaml'], default='yaml', help="Format in which to save/load data")
-    parser.add_argument("--promote", "-P", action=argparse.BooleanOptionalAction, default=False, help="Promote common elements to the album or disc level")
+    parser.add_argument("--promote", "-P", action=argparse.BooleanOptionalAction, default=True, help="Promote common elements to the album or disc level")
+    parser.add_argument("--confirm", "-C", action=argparse.BooleanOptionalAction, default=True, help="Confirm writing of files")
     parser.add_argument("--dryrun", "-n", action=argparse.BooleanOptionalAction, default=False, help="Inoke an editor to edit the generated data")
     parser.add_argument("--editor", "-E", type=str, default=os.environ.get('EDITOR', 'nano'), help="Editor to use")
     parser.add_argument(type=pathlib.Path, nargs='+', dest='files', help='Files to change')
@@ -69,7 +70,7 @@ def parseArgs():
 def checkFile(file):
     try:
         if not isAudio(file):
-            print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
+            #print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
     except FileNotFoundError:
         print(f"{file} not found")
@@ -236,6 +237,7 @@ def printSummary(details):
 def doCopy(newData, currentData, replace, delete):
     nChanged = 0
     results = []
+    fChanged = []
     for file in currentData:
         cprint(f"Copying tags to {file.filename.name}", 'yellow')
         details = ([], [], [], [])
@@ -244,12 +246,17 @@ def doCopy(newData, currentData, replace, delete):
             new = newData[file.filename.name]
             changed, stats = copyTags(new, file, ALL_TAGS, replace, delete, details=details)
             nChanged += changed
+            if changed:
+                fChanged.append(file.filename.name)
             results.append(stats)
             printSummary(details)
         except KeyError:
             print(f"Tags for {file.filename} not found.")
     (added, replaced, deleted, errors) = addTuples(*results)
     print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
+    if nChanged:
+        print(f"Changed: {fChanged}")
+    return fChanged
 
 def saveTags(tags, file, format):
     match format:
@@ -264,6 +271,16 @@ def loadTags(file, format):
             return json.load(file)
         case 'yaml':
             return yaml.load(file, yaml.SafeLoader)
+
+def confirm(prompt, default='y'):
+    while True:
+        x = input(prompt).strip().lower()
+        if not x:
+            x = default.lower()
+        if x in ['y', 'yes']:
+            return True
+        elif x in ['n', 'no']:
+            return False
 
 def main():
     global beQuiet
@@ -304,15 +321,20 @@ def main():
         if args.promote and len(origTags) > 1:
             newTags = demoteTags(newTags)
 
-        doCopy(newTags, fileData, args.replace, args.delete)
+        changedFiles = doCopy(newTags, fileData, args.replace, args.delete)
 
         if not args.dryrun:
-
-            for i in fileData:
-                times = i.filename.stat()
-                i.save()
-                if args.preserve:
-                    os.utime(i.filename, times=(times.st_atime, times.st_mtime))
+            if changedFiles:
+                if not args.confirm or confirm("Write changes [Y/n]: "):
+                    for i in fileData:
+                        if not i.filename.name in changedFiles:
+                            continue
+                        times = i.filename.stat()
+                        i.save()
+                        if args.preserve:
+                            os.utime(i.filename, times=(times.st_atime, times.st_mtime))
+            else:
+                cprint("No changes", "cyan")
 
         #pprint.pprint(newData, compact=True, width=132)
 
