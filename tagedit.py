@@ -35,28 +35,16 @@ import pprint
 import tempfile
 import os
 import json
-import time
 
 from collections import Counter
 
-import magic
 import yaml
 import music_tag
 from termcolor import cprint, colored
 
 from Utils import isAudio, addTuples
 
-# FIXME: These should be extract from music_tag
-# VALID_TAGS = sorted([
-#    "ACOUSTIDFINGERPRINT", "ACOUSTIDID", "ALBUM", "ALBUMARTIST", "ALBUMARTISTSORT", "ALBUMSORT", "ARTIST", "ARTISTSORT", "ARTWORK",
-#    "COMMENT", "COMPILATION", "COMPOSER", "COMPOSERSORT", "DISCNUMBER", "DISCSUBTITLE", "GENRE", "ISRC", "KEY", "LYRICS", "MEDIA",
-#    "MOVEMENT", "MOVEMENTNUMBER", "MOVEMENTTOTAL", "MUSICBRAINZALBUMARTISTID", "MUSICBRAINZALBUMID", "MUSICBRAINZARTISTID",
-#    "MUSICBRAINZDISCID", "MUSICBRAINZORIGINALALBUMID", "MUSICBRAINZORIGINALARTISTID", "MUSICBRAINZRECORDINGID", "MUSICBRAINZRELEASEGROUPID",
-#    "MUSICBRAINZTRACKID", "MUSICBRAINZWORKID", "MUSICIPFINGERPRINT", "MUSICIPPUID", "SUBTITLE", "TITLESORT", "TOTALDISCS",
-#    "TOTALTRACKS", "TRACKNUMBER", "TRACKTITLE", "WORK", "YEAR" ])
-
-VALID_TAGS = sorted([i for i in map(str.upper, music_tag.tags()) if not i.startswith('#')])
-
+ALL_TAGS = list(filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags()))
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Edit the tags in a collect of files")
@@ -79,7 +67,6 @@ def parseArgs():
 
 
 def checkFile(file):
-    print(file)
     try:
         if not isAudio(file):
             print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
@@ -94,29 +81,68 @@ stats = Counter()
 
 
 def doLoadFiles(files: list[pathlib.Path]):
-    #print(files)
     toLoad = [f for f in files if checkFile(f)]
-    #print(toCheck)
     return map(music_tag.load_file, toLoad)
-
 
 def loadFiles(files: list[pathlib.Path]):
     if len(files) == 1 and files[0].is_dir():
-        return doLoadFiles(list(files[0].iterdir))
-    else:
-        return doLoadFiles(files)
+        return doLoadFiles(files[0].iterdir())
+    return doLoadFiles(files)
 
 def noList(value):
     if type(value) is list and len(value) == 1:
         return value[0]
-    else:
-        return value
-
+    return value
 
 def makeDict(tags):
     d = dict(map(lambda x: (x, noList(tags[x].values)),
-                    [f for f in tags.keys() if f != 'artwork' and not f.startswith('#')]))
+                 [f for f in tags.keys() if f != 'artwork' and not f.startswith('#')]))
     return d
+
+def consolidateTag(data, tag):
+    values = Counter()
+    for i in data:
+        track = data[i]
+        if tag in track:
+            x = listToTuple(track[tag])
+
+            values[x] += 1
+    return values
+
+def tupleToList(x):
+    if isinstance(x, tuple):
+        return list(x)
+    return x
+
+def listToTuple(x):
+    if isinstance(x, list):
+        return tuple(x)
+    return x
+
+def promoteTags(tags):
+    consolidated = {}
+    album = {}
+    albumTags = {}
+    for tag in ALL_TAGS:
+        consolidated = consolidateTag(tags, tag)
+        if len(consolidated) == 1:
+            albumTags[tag] = tupleToList(consolidated.popitem()[0])
+
+            for i in tags:
+                if tag in tags[i]:
+                    del tags[i][tag]
+    album['tracks'] = tags
+    album['tags'] = albumTags
+
+    return album
+
+def demoteTags(album):
+    tracks = album['tracks']
+    tags = album['tags']
+    for i in tracks:
+        tracks[i] = tags | tracks[i]
+    return tracks
+
 
 def copyTags(frTags, toTags, tags, replace, delete, details=None):
     """
@@ -149,6 +175,8 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     for tag in tags:
         try:
             frValue = frTags.get(tag, None)
+            if frValue and type(frValue) is not list:
+                frValue = [frValue]
 
             # Get the "to" value
             # if the value is unparseable, just ignore it
@@ -159,12 +187,12 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
 
             if frValue:
                 if toValue:
-                    #print(tag, frValue, toValue, type(frValue), type(toValue))
+                    #print(tag, "--", frValue, ":", toValue.values)
                     if tag == 'artwork':
                         # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
                         if frValue.first.data == toValue.first.data:
                             continue
-                    elif frValue == toValue.values:
+                    elif set(frValue) == set(toValue.values):
                         continue
                     if not replace:
                         continue
@@ -179,7 +207,6 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
                 toTags[tag] = frValue
                 changed = True
             elif delete and toValue:
-                print("Deleting ", tag)
                 if details:
                     deleted.append((tag, toValue))
                 del toTags[tag]
@@ -192,7 +219,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     return changed, (nAdded, nReplaced, nDeleted, nErrors)
 
 def printSummary(details):
-    (added, replaced, deleted, errorrs) = details
+    (added, replaced, deleted, errors) = details
     if added:
         tags = list(map(lambda x: x[0], added))
         print(f"{colored('Added', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
@@ -203,38 +230,58 @@ def printSummary(details):
         tags = list(map(lambda x: x[0], deleted))
         print(f"{colored('Deleted', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
     if not (added or deleted or replaced):
-        print(colored("Nothing changed", "cyan"))
+        cprint("Nothing changed", "cyan")
+
+
 def doCopy(newData, currentData, replace, delete):
-    allTags = filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags())
     nChanged = 0
     results = []
     for file in currentData:
+        cprint(f"Copying tags to {file.filename.name}", 'yellow')
         details = ([], [], [], [])
 
-        print(f"Copying tags to {file.filename.name}")
-        pprint.pprint(newData)
         try:
             new = newData[file.filename.name]
-            changed, stats = copyTags(new, file, allTags, replace, delete, details=details)
+            changed, stats = copyTags(new, file, ALL_TAGS, replace, delete, details=details)
             nChanged += changed
             results.append(stats)
             printSummary(details)
-        except KeyError as e:
+        except KeyError:
             print(f"Tags for {file.filename} not found.")
-    summary = addTuples(*results)
-    print(summary)
+    (added, replaced, deleted, errors) = addTuples(*results)
+    print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
 
+def saveTags(tags, file, format):
+    match format:
+        case 'json':
+            json.dump(tags, file, indent=4)
+        case 'yaml':
+            file.write(yaml.dump(tags))
+
+def loadTags(file, format):
+    match format:
+        case 'json':
+            return json.load(file)
+        case 'yaml':
+            return yaml.load(file, yaml.SafeLoader)
 
 def main():
     global beQuiet
     args = parseArgs()
 
-    currentData = list(loadFiles(args.files))
+    fileData = list(loadFiles(args.files))
+
     if args.load:
-        allData = yaml.load(args.load.read(), yaml.SafeLoader)
-    allData = dict(map(lambda x: (x.filename.name, makeDict(x)), currentData))
+        origTags = loadTags(args.load, args.format)
+    else:
+        origTags = dict(map(lambda x: (x.filename.name, makeDict(x)), fileData))
+
+    # If we're using the "promotion" feature, promote all and disc values
+    if args.promote and len(origTags) > 1:
+        origTags = promoteTags(origTags)
+
     with tempfile.NamedTemporaryFile("w+") as temp:
-        temp.write(yaml.dump(allData))
+        temp.write(yaml.dump(origTags))
         temp.flush()
         loaded = False
         if args.edit:
@@ -242,23 +289,31 @@ def main():
                 os.system(f"{args.editor} {temp.name}")
                 try:
                     temp.seek(0)
-                    newData = yaml.load(open(temp.name, "r"), yaml.SafeLoader)
-                    pprint.pprint(newData)
+                    newTags = yaml.load(open(temp.name, "r"), yaml.SafeLoader)
+                    #pprint.pprint(newTags)
                     loaded = True
                 except yaml.YAMLError as y:
                     print(f"Error: {y}")
                     loaded = True  #
         else:
-            newData = allData
-        doCopy(newData, currentData, args.replace, args.delete)
-        if not args.dryrun:
-            for i in currentData:
-                i.save()
+            newTags = origTags
+
         if args.save:
-            if args.format == 'json':
-                json.dump(newData, args.save, indent=4)
-            else:
-                args.save.write(yaml.dump(newData))
+            saveTags(newTags, args.save, args.format)
+
+        if args.promote and len(origTags) > 1:
+            newTags = demoteTags(newTags)
+
+        doCopy(newTags, fileData, args.replace, args.delete)
+
+        if not args.dryrun:
+
+            for i in fileData:
+                times = i.filename.stat()
+                i.save()
+                if args.preserve:
+                    os.utime(i.filename, times=(times.st_atime, times.st_mtime))
+
         #pprint.pprint(newData, compact=True, width=132)
 
 if __name__ == '__main__':
