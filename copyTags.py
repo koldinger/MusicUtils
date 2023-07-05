@@ -163,7 +163,6 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
                 toTags[tag] = frValue
                 changed = True
             elif delete and toValue:
-                print("Deleting ", tag)
                 if details:
                     deleted.append((tag, toValue))
                 del toTags[tag]
