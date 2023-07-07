@@ -29,40 +29,34 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import argparse
+
 import pathlib
 import shutil
 import os
+import textwrap
 
 from functools import lru_cache, partial
 from collections import Counter
+from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter
 
-import magic
 import music_tag
 from termcolor import cprint, colored
 
 from Utils import isAudio
 
-# FIXME: These should be extract from music_tag
-#VALID_TAGS = sorted([
-#    "ACOUSTIDFINGERPRINT", "ACOUSTIDID", "ALBUM", "ALBUMARTIST", "ALBUMARTISTSORT", "ALBUMSORT", "ARTIST", "ARTISTSORT", "ARTWORK",
-#    "COMMENT", "COMPILATION", "COMPOSER", "COMPOSERSORT", "DISCNUMBER", "DISCSUBTITLE", "GENRE", "ISRC", "KEY", "LYRICS", "MEDIA",
-#    "MOVEMENT", "MOVEMENTNUMBER", "MOVEMENTTOTAL", "MUSICBRAINZALBUMARTISTID", "MUSICBRAINZALBUMID", "MUSICBRAINZARTISTID",
-#    "MUSICBRAINZDISCID", "MUSICBRAINZORIGINALALBUMID", "MUSICBRAINZORIGINALARTISTID", "MUSICBRAINZRECORDINGID", "MUSICBRAINZRELEASEGROUPID",
-#    "MUSICBRAINZTRACKID", "MUSICBRAINZWORKID", "MUSICIPFINGERPRINT", "MUSICIPPUID", "SUBTITLE", "TITLESORT", "TOTALDISCS",
-#    "TOTALTRACKS", "TRACKNUMBER", "TRACKTITLE", "WORK", "YEAR" ])
-
+# Extract the list of valid tags from the music_tags module.
 VALID_TAGS = sorted([i for i in map(str.upper, music_tag.tags()) if not i.startswith('#')])
 
 class TagArgument:
     tag   = None
     value = None
+
     def __init__(self, string):
         tag, value = string.split("=", 1)
         self.tag = checkTag(tag.strip())
         self.value = value.strip()
         if self.tag.startswith('#'):
-            raise argparse.ArgumentTypeError(f"Cannot set readonly tag {tag}")
+            raise ArgumentTypeError(f"Cannot set readonly tag {tag}")
 
 def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
@@ -83,35 +77,38 @@ def makeTagValues(tags):
 def checkTag(tag):
     tag = tag.upper()
     if not tag.upper() in VALID_TAGS:
-        raise argparse.ArgumentTypeError(f"{tag} is not a valid tag")
+        raise ArgumentTypeError(f"{tag} is not a valid tag")
     return tag
 
 def parseArgs():
-    epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n" +\
-             f"Valid tags are: {', '.join(VALID_TAGS)}"
+    epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"+\
+             "Valid tags are: \n" +\
+             f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}"
 
-    parser = argparse.ArgumentParser(description="Copy tags from one file to another, or via directories", epilog=epilog)
+    parser = ArgumentParser(description="Copy tags from one file to another, or via directories",
+                            epilog=epilog,
+                            formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
     setGroup.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
     setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
-    setGroup.add_argument("--append", "-a",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Add values to current tag")
-    setGroup.add_argument("--clear", '-C',   type=bool, action=argparse.BooleanOptionalAction, default=False, help='Remove all tags')
-    setGroup.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False, help="Preserve timestamps")
+    setGroup.add_argument("--append", "-a",   type=bool, action=BooleanOptionalAction, default=False, help="Add values to current tag")
+    setGroup.add_argument("--clear", '-C',   type=bool, action=BooleanOptionalAction, default=False, help='Remove all tags')
+    setGroup.add_argument("--preserve", "-p", type=bool, action=BooleanOptionalAction, default=False, help="Preserve timestamps")
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
-    printGroup.add_argument("--details", "-D",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print encoding details")
-    printGroup.add_argument("--alltags", "-A",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
-    printGroup.add_argument("--lists", "-L",    type=bool, action=argparse.BooleanOptionalAction, default=True, help="Print list values separately")
+    printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print encoding details")
+    printGroup.add_argument("--alltags", "-A",  type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
+    printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
 
-    parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
-    parser.add_argument("--stats", "-s",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Print stats")
-    parser.add_argument("--quiet", "-q",    type=bool, action=argparse.BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
+    parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
+    parser.add_argument("--stats", "-s",    type=bool, action=BooleanOptionalAction, default=False, help="Print stats")
+    parser.add_argument("--quiet", "-q",    type=bool, action=BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
 
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:
-        partialFunc = partial(makeTagArgument, arg)
-        group.add_argument(f"--{arg}", nargs=1, dest="tags", type=partialFunc, action='append', help=argparse.SUPPRESS)   #f"Set the {arg} tag")
+        makeTagValFunc = partial(makeTagArgument, arg)
+        group.add_argument(f"--{arg}", nargs=1, dest="tags", type=makeTagValFunc, action='append', help=SUPPRESS)   #f"Set the {arg} tag")
 
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
 
@@ -122,20 +119,34 @@ def flatten(l):
         return [num for sublist in l for num in sublist]
     return l
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=64)
 def readfile(name):
+    """
+    Read a file, and cache the results.   For artwork, so we don't have to read the art files multiple times
+    :param name: The filename to read
+    :return: The bytes in the file
+    """
     with open(name, "rb") as f:
         return f.read()
 
 def checkFile(file):
+    """
+    Check to determine if a file exists, and is an audio file.
+    :param file:
+    :return:
+    """
     try:
+        if file.is_dir():
+            print(f"{colored('Error: ', 'red')} {file} is a directory")
+            return False
         if not isAudio(file):
             print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
     except FileNotFoundError:
-        print(f"{file} not found")
+        print(f"{colored('Error: ', 'red')} {file} not found")
         return False
     return True
+
 
 stats = Counter()
 
@@ -154,19 +165,17 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         else:
             values = tags[tag]
         try:
-            curValues = set(data[tag].values)
-            action = 'changed' if curValues else 'added'
+            curVals = set(data[tag].values)
+            action = 'changed' if curVals else 'added'
             if values != set(data[tag].values):
                 if append:
-                    newvals = list(values.union(curValues))
+                    newVals = list(values.union(curVals))
                 else:
-                    newvals = list(values)
-                qprint(f"    Setting tag {tag.upper()} to {newvals}")
-                data[tag.upper()] = list(newvals)
+                    newVals = list(values)
+                qprint(f"    Setting tag {tag.upper()} to {newVals}")
+                data[tag.upper()] = list(newVals)
                 stats[action] += 1
                 updated = True
-            #else:
-            #    qprint(f"    Not changing tag {tag}.  Value already in tags")
         except KeyError as k:
             cprint(f'Invalid tag name {k}', 'red')
         except ValueError as v:
@@ -200,6 +209,7 @@ def removeTags(file, preserve, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
+
 def printFile(file, tags, alltags, details, printList):
     if not checkFile(file):
         return
@@ -232,19 +242,29 @@ def main():
     args = parseArgs()
     if args.quiet:
         beQuiet = True
+
+    # If there's only one file, and it's a directory, list it
+    if len(args.files) == 1 and args.files[0].is_dir():
+        files = sorted(args.files[0].iterdir())
+    else:
+        files = args.files
+
     if args.print or not (args.tags or args.delete or args.clear):
+        # Printing files.   Compute the tags to print, then print 'em
         printtags = []
         if args.print:
             printtags = list(map(str.upper, flatten(args.print)))
-        for f in args.files:
+        for f in files:
             printFile(f, printtags, args.alltags, args.details, args.lists)
     elif args.clear:
-        for f in args.files:
+        # clear all the tags.
+        for f in files:
             removeTags(f, args.preserve, args.dryrun)
     else:
+        # Else we're setting tags.
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
-        for f in args.files:
+        for f in files:
             processFile(f, tags, delete, args.preserve, args.append, args.dryrun)
         if args.stats:
             print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']}")
