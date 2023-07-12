@@ -169,10 +169,17 @@ def processFile(file, tags, delete, preserve, append, dryrun):
             action = 'changed' if curVals else 'added'
             if values != set(data[tag].values):
                 if append:
-                    newVals = list(values.union(curVals))
+                    newVals = list(set(values).union(curVals))
                 else:
                     newVals = list(values)
-                qprint(f"    Setting tag {tag.upper()} to {newVals}")
+                if tag.lower() == 'artwork':
+                    if append:
+                        vals = list(set(tags[tag]).union(map(str, data[tag].values)))
+                    else:
+                        vals = list(tags[tag])
+                    qprint(f"    Setting tag {tag.upper()} to {vals}")
+                else:
+                    qprint(f"    Setting tag {tag.upper()} to {newVals}")
                 data[tag.upper()] = list(newVals)
                 stats[action] += 1
                 updated = True
