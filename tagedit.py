@@ -124,14 +124,19 @@ def promoteTags(tags):
     consolidated = {}
     album = {}
     albumTags = {}
+    numAlbums = len(tags)
     for tag in ALL_TAGS:
         consolidated = consolidateTag(tags, tag)
+        pprint.pprint(consolidated)
+        # Check that there's only1 tag
         if len(consolidated) == 1:
-            albumTags[tag] = tupleToList(consolidated.popitem()[0])
-
-            for i in tags:
-                if tag in tags[i]:
-                    del tags[i][tag]
+            item = consolidated.popitem()
+            # And that it's in every file
+            if item[1] == numAlbums:
+                albumTags[tag] = tupleToList(item[0])
+                for i in tags:
+                    if tag in tags[i]:
+                        del tags[i][tag]
     album['tracks'] = tags
     album['tags'] = albumTags
 
@@ -339,4 +344,7 @@ def main():
         #pprint.pprint(newData, compact=True, width=132)
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        cprint("Interrupted", "red")
