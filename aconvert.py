@@ -110,7 +110,7 @@ def collectFiles(src):
     dirs = []
     files = []
 
-    logger.info("Processing directory {}".format(src))
+    logger.info("Scanning directory {}".format(src))
 
     for i in sorted(src.iterdir()):
         if i.is_dir():
