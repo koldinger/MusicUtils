@@ -38,8 +38,11 @@ import textwrap
 from functools import lru_cache, partial
 from collections import Counter
 from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter
+from hashlib import md5
 
+import magic
 import music_tag
+from PIL import Image
 from termcolor import cprint, colored
 
 from Utils import isAudio
@@ -108,7 +111,7 @@ def parseArgs():
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:
         makeTagValFunc = partial(makeTagArgument, arg)
-        group.add_argument(f"--{arg}", nargs=1, dest="tags", type=makeTagValFunc, action='append', help=SUPPRESS)   #f"Set the {arg} tag")
+        group.add_argument(f"--{arg.upper()}", f"--{arg.lower()}", nargs=1, dest="tags", type=makeTagValFunc, action='append', help=SUPPRESS)   #f"Set the {arg} tag")
 
     parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
 
@@ -128,6 +131,16 @@ def readfile(name):
     """
     with open(name, "rb") as f:
         return f.read()
+
+@lru_cache(maxsize=64)
+def imageInfo(name):
+    data = readfile(name)
+    mime = magic.from_buffer(data, mime=True)
+    image = Image.open(name)
+    size = image.size
+    hash = md5(data).hexdigest()
+    info = f"{name} - {mime} {size[0]}x{size[1]} {hash}"
+    return info
 
 def checkFile(file):
     """
@@ -149,6 +162,7 @@ def checkFile(file):
 
 
 stats = Counter()
+
 
 def processFile(file, tags, delete, preserve, append, dryrun):
     if not checkFile(file):
@@ -174,9 +188,9 @@ def processFile(file, tags, delete, preserve, append, dryrun):
                     newVals = list(values)
                 if tag.lower() == 'artwork':
                     if append:
-                        vals = list(set(tags[tag]).union(map(str, data[tag].values)))
+                        vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values)))
                     else:
-                        vals = list(tags[tag])
+                        vals = list(map(imageInfo, tags[tag]))
                     qprint(f"    Setting tag {tag.upper()} to {vals}")
                 else:
                     qprint(f"    Setting tag {tag.upper()} to {newVals}")
