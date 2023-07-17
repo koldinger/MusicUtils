@@ -75,7 +75,7 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
         subDst = pathlib.Path(dstDir, i)
         if subDst.is_dir():
             changes2 = copyTree(subSrc, subDst, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
-            changes = addTuples(changes, *changes2)
+            changes = addTuples(changes, changes2)
         elif subDst.exists():
             print("{} is not a directory".format(colored(subDst, "red")))
         else:
