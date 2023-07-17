@@ -33,6 +33,7 @@ import argparse
 import shutil
 import fnmatch
 import re
+import sys
 
 import pathlib
 from termcolor import cprint
@@ -105,4 +106,7 @@ def main():
     return 0
 
 if __name__ == '__main__':
-    main()
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        cprint("Interrupted", "red")
