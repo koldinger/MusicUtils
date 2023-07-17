@@ -127,8 +127,7 @@ def promoteTags(tags):
     numAlbums = len(tags)
     for tag in ALL_TAGS:
         consolidated = consolidateTag(tags, tag)
-        pprint.pprint(consolidated)
-        # Check that there's only1 tag
+        # Check that there's only 1 tag
         if len(consolidated) == 1:
             item = consolidated.popitem()
             # And that it's in every file
@@ -257,9 +256,10 @@ def doCopy(newData, currentData, replace, delete):
             printSummary(details)
         except KeyError:
             print(f"Tags for {file.filename} not found.")
-    (added, replaced, deleted, errors) = addTuples(*results)
-    print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
-    if nChanged:
+    if results:
+        (added, replaced, deleted, errors) = addTuples(*results)
+        print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
+    if fChanged:
         print(f"Changed: {fChanged}")
     return fChanged
 
