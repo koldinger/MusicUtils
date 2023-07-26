@@ -80,7 +80,7 @@ def prune(d, delPat, verbose, hidden, noDelete):
     return numFiles
 
 def makeDeletions(args):
-    macPats = ["._.*", ".DS_Store"]
+    macPats = ["._.*", ".DS_Store", "._DS_Store"]
     patterns = args.delete.copy()
     if args.macFiles:
         patterns.extend(macPats)
