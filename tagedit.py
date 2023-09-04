@@ -34,6 +34,7 @@ import pathlib
 import pprint
 import tempfile
 import os
+import sys
 import json
 
 from collections import Counter
@@ -69,7 +70,7 @@ def parseArgs():
 
 def checkFile(file):
     try:
-        if not isAudio(file):
+        if not (file.is_file() and isAudio(file)):
             #print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
     except FileNotFoundError:
@@ -80,10 +81,9 @@ def checkFile(file):
 
 stats = Counter()
 
-
 def doLoadFiles(files: list[pathlib.Path]):
     toLoad = [f for f in files if checkFile(f)]
-    return map(music_tag.load_file, toLoad)
+    return list(map(music_tag.load_file, toLoad))
 
 def loadFiles(files: list[pathlib.Path]):
     if len(files) == 1 and files[0].is_dir():
@@ -260,7 +260,7 @@ def doCopy(newData, currentData, replace, delete):
         (added, replaced, deleted, errors) = addTuples(*results)
         print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
     if fChanged:
-        print(f"Changed: {fChanged}")
+        print(f"Changed: {sorted(fChanged)}")
     return fChanged
 
 def saveTags(tags, file, format):
@@ -292,6 +292,10 @@ def main():
     args = parseArgs()
 
     fileData = list(loadFiles(args.files))
+
+    if not fileData:
+        cprint("No audio files found", "red")
+        sys.exit(1)
 
     if args.load:
         origTags = loadTags(args.load, args.format)
