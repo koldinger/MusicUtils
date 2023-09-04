@@ -367,7 +367,7 @@ def reorgDir(directory):
                         tags = getTags(file)
                         audio.append((file, tags))
                         if args.classical:
-                            composers.add(classicalArtist)
+                            composers.add(classicalArtist(tags))
 
             except NotAudioException as exc:
                 log.warning(exc)
