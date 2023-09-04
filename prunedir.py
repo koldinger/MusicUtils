@@ -40,16 +40,17 @@ from termcolor import cprint
 
 def processArgs():
     parser = argparse.ArgumentParser(description='Remove empty directories', add_help=True)
-    parser.add_argument('--delete', '-d', dest='delete',   action='append', default=[], help="Files, or regular expressions, to delete")
-    parser.add_argument('--mac', '-m',    dest='macFiles', action=argparse.BooleanOptionalAction, default=False, help='Delete Mac files that start with ._.')
-    parser.add_argument('--hidden', '-a', dest='hidden',   action=argparse.BooleanOptionalAction, default=False, help='Delete hidden directories as well')
-    parser.add_argument('--dry-run', '-n', dest='dryRun',  action=argparse.BooleanOptionalAction, default=False, help='Only show which files can be deleted')
-    parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help='Increase verbosity')
+    parser.add_argument('--delete', '-d',   dest='delete',      action='append', default=[], help="Files, or regular expressions, to delete")
+    parser.add_argument('--empty', '-e',    dest='empty',       action=argparse.BooleanOptionalAction, default=False, help='Delete empty files')
+    parser.add_argument('--mac', '-m',      dest='macFiles',    action=argparse.BooleanOptionalAction, default=False, help='Delete Mac metadata files.  Implies --hidden')
+    parser.add_argument('--hidden', '-a',   dest='hidden',      action=argparse.BooleanOptionalAction, default=False, help='Delete hidden files and directories')
+    parser.add_argument('--dry-run', '-n',  dest='dryRun',      action=argparse.BooleanOptionalAction, default=False, help='Only show which files can be deleted')
+    parser.add_argument('--verbose', '-v',  dest='verbose',     action='count', default=0, help='Increase verbosity')
     parser.add_argument(nargs='*', dest='dirs', type=pathlib.Path, default=[pathlib.Path('.')], help='Directories to prune')
 
     return parser.parse_args()
 
-def prune(d, delPat, verbose, hidden, noDelete):
+def prune(d, delPat, verbose, hidden, empty, noDelete):
     if not d.is_dir():
         return 1
 
@@ -67,7 +68,7 @@ def prune(d, delPat, verbose, hidden, noDelete):
 
     for f in files:
         if f.is_dir():
-            if prune(f, delPat, verbose, hidden, noDelete) == 0:
+            if prune(f, delPat, verbose, hidden, empty, noDelete) == 0:
                 cprint(f"Deleting directory: {f}", "blue", attrs=['bold'])
                 if not noDelete:
                     shutil.rmtree(f)
@@ -75,6 +76,10 @@ def prune(d, delPat, verbose, hidden, noDelete):
         elif delPat and delPat.match(f.name):
             if verbose:
                 cprint(f"Can delete {f}", "cyan")
+            numFiles -= 1
+        elif empty and f.stat().st_size == 0:
+            if verbose:
+                cprint(f"Can delete empty {f}", "cyan")
             numFiles -= 1
 
     return numFiles
@@ -96,7 +101,7 @@ def main():
 
     for i in args.dirs:
         if i.is_dir():
-            dirSize = prune(i, delPat, args.verbose, args.hidden, args.dryRun)
+            dirSize = prune(i, delPat, args.verbose, (args.hidden | args.macFiles), args.empty, args.dryRun)
             if dirSize == 0 and not i == pathlib.Path('.'):
                 cprint(f"Deleting directory: {i}", "blue", attrs=['bold'])
                 if not args.dryRun:
