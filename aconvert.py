@@ -45,6 +45,10 @@ import music_tag
 import progressbar
 from pydub import AudioSegment
 
+from rich.progress import *
+import rich.logging
+import rich.highlighter
+
 Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "params", "logger", "args"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])
 
@@ -84,8 +88,9 @@ logger = None
 args = None
 
 def initLogging(verbosity):
-    progressbar.streams.wrap_stderr()
-    handler = colorlog.StreamHandler()
+    #progressbar.streams.wrap_stderr()
+    #handler = colorlog.StreamHandler()
+    handler = rich.logging.RichHandler(show_time=True, show_path=False, highlighter=rich.highlighter.NullHighlighter())
     colors={
         'DEBUG':    'cyan',
         'INFO':     'green',
@@ -94,8 +99,8 @@ def initLogging(verbosity):
         'CRITICAL': 'red,bg_white',
     }
     #formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s', log_colors=colors)
-    formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s', log_colors=colors)
-    handler.setFormatter(formatter)
+    #formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s', log_colors=colors)
+    #handler.setFormatter(formatter)
 
     levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, verbosity)]        # capped to number of levels
@@ -110,7 +115,7 @@ def collectFiles(src):
     dirs = []
     files = []
 
-    logger.info("Scanning directory {}".format(src))
+    logger.debug("Scanning directory {}".format(src))
 
     for i in sorted(src.iterdir()):
         if i.is_dir():
@@ -126,7 +131,7 @@ def collectFiles(src):
     #return files
 
 def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.Path, suffix: str, fmt: str, codec: str, bitrate: str, overwrite=False):
-    logger.info("Creating jobs specifications %s %s %s %s", suffix, fmt, codec, bitrate)
+    logger.debug("Creating jobs specifications %s %s %s %s", suffix, fmt, codec, bitrate)
     jobs = []
     for src in files:
         dest = pathlib.Path(destdir, src.relative_to(srcdir).with_suffix(suffix))
@@ -153,7 +158,7 @@ def convert(job):
         logger.debug("Loaded %s", src)
     except Exception as e:
         print(f"Failed loading {src} {e}")
-        return f"{src} -> {dest} failed loading: {e}"
+        return src, dest, f"{src} -> {dest} failed loading: {e}"
 
     logger.debug("Begining Conversion %s -> %s", src, dest)
 
@@ -167,7 +172,7 @@ def convert(job):
             tmp.close()
     except Exception as e:
         print(f"Failed writing {dest}: {e}")
-        return f"{src} -> {dest} failed writing: {e}"
+        return src, dest, f"{src} -> {dest} failed writing: {e}"
 
     if args.copytags:
         try:
@@ -178,17 +183,17 @@ def convert(job):
                     dstTags[tag] = tags[tag]
             dstTags.save()
         except Exception as e:
-            return f"{src} -> {dest} failed copying tags: {e}"
+            return src, dest, f"{src} -> {dest} failed copying tags: {e}"
 
     if args.copytime:
         try:
             logger.debug("Setting times for %s to %s, %s", dest, time.ctime(times.st_atime), time.ctime(times.st_mtime))
             os.utime(dest, times=(times.st_atime, times.st_mtime))
         except Exception as e:
-            return f"{src} -> {dest} failed copying time {e}"
+            return src, dest, f"{src} -> {dest} failed copying time {e}"
 
     logger.debug("Completed conversion %s -> %s", src, dest)
-    return None
+    return src, dest, None
 
 def processArgs():
     _def = ' (default: %(default)s)'
@@ -234,19 +239,33 @@ def main():
     jobs = makeJobs(audioFiles, srcdir, destdir, suffix, fmt, codec, bitrate, args.overwrite)
 
     logger.info("Running %d conversions on %d processes", len(jobs), args.workers)
-    if args.progress:
-        pbar = progressbar.ProgressBar(maxval=len(jobs))
-        pbar.start()
 
-    with Pool(args.workers) as pool:
-        for error in pool.imap_unordered(convert, jobs):
-            if pbar:
-                pbar += 1
-            if error:
-                logger.error(error)
+    completed = 0
 
-    if pbar:
-        pbar.finish()
+    try:
+        with Pool(args.workers) as pool:
+            with Progress(TextColumn("{task.description}"),
+                          SpinnerColumn(),
+                          BarColumn(bar_width=100),
+                          TaskProgressColumn(),
+                          MofNCompleteColumn(),
+                          TimeRemainingColumn(),
+                          expand=False) as pbar:
+                task = pbar.add_task("Converting", total=len(jobs), visible=args.progress)
+                #pbar.start()
+                for src, dest, error in pool.imap_unordered(convert, jobs):
+                    pbar.advance(task)
+                    logger.info(f"Completed {src.relative_to(args.srcdir)}\tto {dest.relative_to(destdir)}")
+                    if error:
+                        logger.error(error)
+                    completed += 1
+    except KeyboardInterrupt:
+        logger.error("Interrupted...")
+    finally:
+        logger.info(f"Completed {completed} out of {len(jobs)} conversions")
+
+    #if pbar:
+    #    pbar.finish()
 
 if __name__ == "__main__":
     main()
