@@ -34,6 +34,7 @@ import pathlib
 import shutil
 import os
 import textwrap
+import re
 
 from functools import lru_cache, partial
 from collections import Counter
@@ -56,6 +57,7 @@ class TagArgument:
 
     def __init__(self, string):
         tag, value = string.split("=", 1)
+        print(f"Creating {tag} {value} from {string}")
         self.tag = checkTag(tag.strip())
         self.value = value.strip()
         if self.tag.startswith('#'):
@@ -103,6 +105,11 @@ def parseArgs():
     printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print encoding details")
     printGroup.add_argument("--alltags", "-A",  type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
+    printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG', default=[], help="Print only if the tag matches (value is a regular expression)")
+    andOr = printGroup.add_mutually_exclusive_group()
+    andOr.add_argument("--and", dest='and', action='store_true',  default='True', help="Only print if all values match ")
+    andOr.add_argument("--or",  dest='and', action='store_false', default='True', help="Print if any values match ")
+
 
     parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--stats", "-s",    type=bool, action=BooleanOptionalAction, default=False, help="Print stats")
@@ -142,6 +149,11 @@ def imageInfo(name):
     info = f"{name} - {mime} {size[0]}x{size[1]} {hash}"
     return info
 
+@lru_cache(maxsize=64)
+def loadTags(file):
+    return music_tag.load_file(file)
+
+@lru_cache(maxsize=64)
 def checkFile(file):
     """
     Check to determine if a file exists, and is an audio file.
@@ -152,7 +164,7 @@ def checkFile(file):
         if file.is_dir():
             print(f"{colored('Error: ', 'red')} {file} is a directory")
             return False
-        if not isAudio(file):
+        if not (file.is_file() and isAudio(file)):
             print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
     except FileNotFoundError:
@@ -161,14 +173,12 @@ def checkFile(file):
     return True
 
 
-stats = Counter()
-
 
 def processFile(file, tags, delete, preserve, append, dryrun):
     if not checkFile(file):
         return
     qprint(colored(f"Processing file {file}", "green"))
-    data = music_tag.load_file(file)
+    data = loadTags(file)
     updated = False
 
     stats['processed'] += 1
@@ -221,7 +231,7 @@ def removeTags(file, preserve, dryrun):
     if not checkFile(file):
         return
     times = file.stat()
-    data = music_tag.load_file(file)
+    data = loadTags(file)
     qprint(f"Removing tags from {file}")
     data.remove_all()
 
@@ -231,11 +241,11 @@ def removeTags(file, preserve, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 
-def printFile(file, tags, alltags, details, printList):
+def printTags(file, tags, alltags, details, printList):
     if not checkFile(file):
         return
     cprint(f"File: {file}", "green")
-    data = music_tag.load_file(file)
+    data =  loadTags(file)
 
     for tag in map(str.upper, sorted(data.tags())):
         if tags and not tag in tags and not alltags:
@@ -258,6 +268,33 @@ def qprint(*args):
     if not beQuiet:
         print(*args)
 
+def makeRegEx(values):
+    print(values)
+    checks = []
+    for x in values:
+        regex = re.compile(x.value)
+        checks.append((x.tag, regex))
+
+    print(checks)
+    return checks
+
+def checkTagRegEx(data, tag, regex):
+    if current := data.get(tag):
+        for value in current.values:
+            if regex.match(str(value)):
+                return True
+    return False
+
+def checkTagsRegEx(file, checks, andOp=True):
+    if not checkFile(file):
+        return False
+    data = loadTags(file)
+    if andOp:
+        return all(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
+    else:
+        return any(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
+
+
 def main():
     global beQuiet
     args = parseArgs()
@@ -275,8 +312,13 @@ def main():
         printtags = []
         if args.print:
             printtags = list(map(str.upper, flatten(args.print)))
-        for f in files:
-            printFile(f, printtags, args.alltags, args.details, args.lists)
+        if args.value:
+            checks = makeRegEx(flatten(args.value))
+        else:
+            checks = None
+        for file in files:
+            if not checks or checkTagsRegEx(file, checks):
+                printTags(file, printtags, args.alltags, args.details, args.lists)
     elif args.clear:
         # clear all the tags.
         for f in files:
