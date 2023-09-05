@@ -1,0 +1,6 @@
+#! /usr/bin/bash 
+
+echo "$@"
+#fd \\.flac -0 "$@" | while read -d $'\0' file; do echo  "$file"; d=$(dirname "$file"); mkdir -p split/"$d"; echo "++" "$d" "++" "$file" "++"; done
+
+fd \\.flac -0 "$@" | while read -d $'\0' file; do echo  "$file"; d=$(dirname "$file"); mkdir -p split/"$d"; shnsplit -d split/"$d" -o flac -f "$d"/*.cue "$file"; done
