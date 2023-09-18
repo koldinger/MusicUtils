@@ -223,7 +223,8 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
             nErrors += 1
     return changed, (nAdded, nReplaced, nDeleted, nErrors)
 
-def printSummary(details):
+def printSummary(file, details):
+    cprint(f"Setting tags in {file.filename.name}", 'yellow')
     (added, replaced, deleted, errors) = details
     if added:
         tags = list(map(lambda x: x[0], added))
@@ -234,16 +235,15 @@ def printSummary(details):
     if deleted:
         tags = list(map(lambda x: x[0], deleted))
         print(f"{colored('Deleted', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
-    if not (added or deleted or replaced):
-        cprint("Nothing changed", "cyan")
+    #if not (added or deleted or replaced):
+    #    cprint("Nothing changed", "cyan")
 
 
-def doCopy(newData, currentData, replace, delete):
+def setTags(newData, currentData, replace, delete):
     nChanged = 0
     results = []
     fChanged = []
     for file in currentData:
-        cprint(f"Copying tags to {file.filename.name}", 'yellow')
         details = ([], [], [], [])
 
         try:
@@ -253,7 +253,8 @@ def doCopy(newData, currentData, replace, delete):
             if changed:
                 fChanged.append(file.filename.name)
             results.append(stats)
-            printSummary(details)
+            if changed:
+                printSummary(file, details)
         except KeyError:
             print(f"Tags for {file.filename} not found.")
     if results:
@@ -330,7 +331,7 @@ def main():
         if args.promote and len(origTags) > 1:
             newTags = demoteTags(newTags)
 
-        changedFiles = doCopy(newTags, fileData, args.replace, args.delete)
+        changedFiles = setTags(newTags, fileData, args.replace, args.delete)
 
         if not args.dryrun:
             if changedFiles:
