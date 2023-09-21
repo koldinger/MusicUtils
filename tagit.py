@@ -90,7 +90,7 @@ def parseArgs():
              "Valid tags are: \n" +\
              f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}"
 
-    parser = ArgumentParser(description="Copy tags from one file to another, or via directories",
+    parser = ArgumentParser(description="Set or print tags in an audio file",
                             epilog=epilog,
                             formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
@@ -173,6 +173,7 @@ def checkFile(file):
     return True
 
 
+stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0 }
 
 def processFile(file, tags, delete, preserve, append, dryrun):
     if not checkFile(file):
