@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # MusicUtilities: A set of utilities for working with music files.
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -32,17 +31,13 @@
 import pathlib
 import argparse
 import logging
-import sys
 import os
 import time
-from pprint import pprint
 from multiprocessing import Pool
 from collections import namedtuple
 
-import magic
 import colorlog
 import music_tag
-import progressbar
 from pydub import AudioSegment
 
 from rich.progress import *
@@ -115,7 +110,7 @@ def collectFiles(src):
     dirs = []
     files = []
 
-    logger.debug("Scanning directory {}".format(src))
+    logger.debug(f"Scanning directory {src}")
 
     for i in sorted(src.iterdir()):
         if i.is_dir():
@@ -149,7 +144,7 @@ def convert(job):
     logger = job.logger
     args = job.args
 
-    #print(f"Running job {src} ({src.suffix}) to {dest} ({dest.suffix}, {job.format})") 
+    #print(f"Running job {src} ({src.suffix}) to {dest} ({dest.suffix}, {job.format})")
 
     try:
         times = src.stat()
