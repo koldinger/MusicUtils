@@ -104,7 +104,7 @@ def processArgs():
                         help='Use articles')
     parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,
                         help='Use classical naming')
-    parser.add_argument('--surname', '-S', dest='surname', default=True, action=argparse.BooleanOptionalAction,
+    parser.add_argument('--surname', '-S', dest='surname', default=False, action=argparse.BooleanOptionalAction,
                         help='Use the sorted name (ie, surname) of the composer if available' + _def)
     parser.add_argument('--length', dest='maxlength', default=75, type=int,
                         help='Maximum length of file names' + _def)
@@ -112,6 +112,9 @@ def processArgs():
                         help='Cleanup empty directories and dragged files when done' + _def)
     parser.add_argument('--ignore-case', '-I', dest='ignorecase', default=False,  action=argparse.BooleanOptionalAction,
                         help='Ignore case when determining if target exists' + _def)
+
+    parser.add_argument('--unknown', dest='unknown', default=True, action=argparse.BooleanOptionalAction,
+                        help="Ignore 'unknown' files without artist or album info")
 
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
                         help='Increase the verbosity')
@@ -153,6 +156,8 @@ def makeFName(file, tags):
 
     title = tags.get('tracktitle').first
     if title is None:
+        if not args.unknown:
+            return None
         title = 'Unknown'
 
     if 'subtitle' in tags:
@@ -220,7 +225,11 @@ def makeDName(file, tags, dirname=None):
                 dirname = getArtist(tags)
             dirname = munge(dirname)
 
-        album = tags.get('album').first or "Unknown"
+        album = tags.get('album').first
+        if not album:
+            if not args.unknown:
+                return None
+            album = 'Unknown'
 
         base = base.joinpath(dirname, munge(album))
 
@@ -297,7 +306,12 @@ def renameFile(file, tags, dragfiles=[], dirname=None):
     action = actionName()
     try:
         dest = makeName(file, tags, dirname)
+        if dest is None:
+            log.info(f"Skipping file {file.name}.   Unknown album or artist")
+            return None
+
         if file.expanduser().absolute() == dest.expanduser().absolute():
+            log.debug(f"Src {file} and dest {dest} are the same.   No changes")
             return dest
 
         if dest.exists():
@@ -308,6 +322,7 @@ def renameFile(file, tags, dragfiles=[], dirname=None):
         if args.ignorecase and file.name.lower() == dest.name.lower():
             log.debug(f"Not moving {file.name} to {dest.name}.   Change is only in case")
             return dest
+
 
         log.log(logging.ACTION, f"{action} {file}\t==>  {dest}")
 
