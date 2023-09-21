@@ -40,7 +40,7 @@ import colorlog
 import music_tag
 from pydub import AudioSegment
 
-from rich.progress import *
+from rich.progress import Progress, TextColumn, SpinnerColumn, BarColumn, TaskProgressColumn, MofNCompleteColumn, TimeRemainingColumn
 import rich.logging
 import rich.highlighter
 
@@ -83,32 +83,19 @@ logger = None
 args = None
 
 def initLogging(verbosity):
-    #progressbar.streams.wrap_stderr()
-    #handler = colorlog.StreamHandler()
     handler = rich.logging.RichHandler(show_time=True, show_path=False, highlighter=rich.highlighter.NullHighlighter())
-    colors={
-        'DEBUG':    'cyan',
-        'INFO':     'green',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
-        'CRITICAL': 'red,bg_white',
-    }
-    #formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s', log_colors=colors)
-    #formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s', log_colors=colors)
-    #handler.setFormatter(formatter)
 
     levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, verbosity)]        # capped to number of levels
 
-    logger = colorlog.getLogger('reorg')
-    logger.addHandler(handler)
-    logger.setLevel(level)
+    log = colorlog.getLogger('reorg')
+    log.addHandler(handler)
+    log.setLevel(level)
 
-    return logger
+    return log
 
 def collectFiles(src):
     dirs = []
-    files = []
 
     logger.debug(f"Scanning directory {src}")
 
@@ -116,11 +103,9 @@ def collectFiles(src):
         if i.is_dir():
             dirs.append(i)
         elif i.suffix.lower() in inputtypes:
-            #files.append(i)
             yield i
 
     for i in dirs:
-        #files.extend(collectFiles(i))
         yield from collectFiles(i)
 
     #return files
@@ -132,7 +117,6 @@ def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.P
         dest = pathlib.Path(destdir, src.relative_to(srcdir).with_suffix(suffix))
         logger.debug("%s -> %s", src, dest)
         if not dest.exists() or overwrite or (empty and dest.exists() and dest.stat().st_size == 0):
-            # TODO: Add the parameters argument.
             jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger, args))
         else:
             logger.debug("Skipping %s.  Target %s exists", src, dest)
