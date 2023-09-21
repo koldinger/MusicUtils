@@ -130,13 +130,13 @@ def collectFiles(src):
 
     #return files
 
-def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.Path, suffix: str, fmt: str, codec: str, bitrate: str, overwrite=False):
+def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.Path, suffix: str, fmt: str, codec: str, bitrate: str, overwrite=False, empty=False):
     logger.debug("Creating jobs specifications %s %s %s %s", suffix, fmt, codec, bitrate)
     jobs = []
     for src in files:
         dest = pathlib.Path(destdir, src.relative_to(srcdir).with_suffix(suffix))
         logger.debug("%s -> %s", src, dest)
-        if not dest.exists() or overwrite:
+        if not dest.exists() or overwrite or (empty and dest.exists() and dest.stat().st_size == 0):
             # TODO: Add the parameters argument.
             jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger, args))
         else:
@@ -209,6 +209,7 @@ def processArgs():
     parser.add_argument('--copytags', '-t', dest='copytags', action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
     parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
     parser.add_argument('--overwrite', '-O', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
+    parser.add_argument('--empty', '-E', dest='empty', action=argparse.BooleanOptionalAction, default=False, help='Overwrite empty files' + _def)
     parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]", help="Number of concurrent jobs to use" + _def)
     parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
     parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
@@ -236,7 +237,7 @@ def main():
 
     audioFiles = collectFiles(srcdir)
 
-    jobs = makeJobs(audioFiles, srcdir, destdir, suffix, fmt, codec, bitrate, args.overwrite)
+    jobs = makeJobs(audioFiles, srcdir, destdir, suffix, fmt, codec, bitrate, args.overwrite, args.empty)
 
     logger.info("Running %d conversions on %d processes", len(jobs), args.workers)
 
