@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # MusicUtilities: A set of utilities for working with music files.
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -37,7 +36,6 @@ import textwrap
 import re
 
 from functools import lru_cache, partial
-from collections import Counter
 from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter
 from hashlib import md5
 
@@ -106,6 +104,7 @@ def parseArgs():
     printGroup.add_argument("--alltags", "-A",  type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG', default=[], help="Print only if the tag matches (value is a regular expression)")
+
     andOr = printGroup.add_mutually_exclusive_group()
     andOr.add_argument("--and", dest='and', action='store_true',  default='True', help="Only print if all values match ")
     andOr.add_argument("--or",  dest='and', action='store_false', default='True', help="Print if any values match ")
