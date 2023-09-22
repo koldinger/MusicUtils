@@ -157,7 +157,7 @@ def printAlbumInfo(artist, album, tracks, fmt):
     duration = milliToTime(duration)
     size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
     values = {"artist": artist, "albumartist": artist, "album": album, "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'tracks': tracks, 'disks': disks, 'albums': '', 'size': size}
-    print(genres)
+    #print(genres)
     printTrackInfo(values, fmt)
 
 
@@ -189,6 +189,7 @@ def printDatabase():
         else:
             for album in sorted(albums.keys()):
                 tracks = albums[album]
+                print(tracks)
                 if args.level == 'album':
                     printAlbumInfo(artist, album, tracks, fmt)
                 else:
@@ -230,15 +231,15 @@ def makeInfo(tag, f, base):
     fullpath = f.absolute()
     path = fullpath if args.fullpath else f.absolute().relative_to(base)
 
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath, 'albumdpath': fullpath.parent()}
     return values
 
 def getAlbumStats(album):
     tracks = len(album)
-    disks = len(set([album[x]['disk'] for x in album]))
+    disks = len({album[x]['disk'] for x in album})
     duration = sum([album[x]['duration'] for x in album])
     size = sum([album[x]['isize'] for x in album])
-    genres = list(set([album[x]['genre'] for x in album]))
+    genres = list({album[x]['genre'] for x in album})
     #print(disks, tracks, duration)
     return (disks, tracks, duration, size, genres)
 
