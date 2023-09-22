@@ -47,7 +47,6 @@ import magic
 
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
-    pass
 
 ACTION_LINK=1
 ACTION_MOVE=2
@@ -302,7 +301,7 @@ def actionName():
     return name
 
 
-def renameFile(file, tags, dragfiles=[], dirname=None):
+def renameFile(file, tags, dragfiles=None, dirname=None):
     action = actionName()
     try:
         dest = makeName(file, tags, dirname)
