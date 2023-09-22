@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # MusicUtilities: A set of utilities for working with music files.
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -180,7 +179,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     for tag in tags:
         try:
             frValue = frTags.get(tag, None)
-            if frValue and type(frValue) is not list:
+            if frValue and not isinstance(frTags, list):
                 frValue = [frValue]
 
             # Get the "to" value
@@ -225,7 +224,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
 
 def printSummary(file, details):
     cprint(f"Setting tags in {file.filename.name}", 'yellow')
-    (added, replaced, deleted, errors) = details
+    (added, replaced, deleted, _) = details
     if added:
         tags = list(map(lambda x: x[0], added))
         print(f"{colored('Added', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
@@ -316,7 +315,7 @@ def main():
                 os.system(f"{args.editor} {temp.name}")
                 try:
                     temp.seek(0)
-                    newTags = yaml.load(open(temp.name, "r"), yaml.SafeLoader)
+                    newTags = yaml.load(open(temp.name), yaml.SafeLoader)
                     #pprint.pprint(newTags)
                     loaded = True
                 except yaml.YAMLError as y:
