@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# vim: set et sw=4 sts=4 fileencoding=utf-8:
 #
 # MusicUtilities: A set of utilities for working with music files.
 # Copyright 2013-2024, Eric Koldinger, All Rights Reserved.
@@ -35,9 +34,7 @@ import shutil
 import sys
 import os
 import pprint
-import traceback
 
-import magic
 import music_tag
 
 from termcolor import colored
@@ -56,14 +53,24 @@ class PrintOnce:
 
 def backupFile(path):
     bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
-    print("Backing up {} to {}".format(path, bupPath))
+    print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
 
 def addTuples(*args):
     return tuple(map(sum, zip(*args)))
 
+def makeBaseNameDict(names):
+    d = { x.stem:x for x in names }
+    return d
+
 def matchFiles(srcs, dsts):
-    return list(zip(sorted(srcs), sorted(dsts)))
+    dstHash = makeBaseNameDict(dsts)
+    matches = []
+    for i in srcs:
+        name = i.stem
+        if name in dstHash:
+            matches.append((i, dstHash[name]))
+    return matches
 
 def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
     #print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
@@ -77,16 +84,16 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
             changes2 = copyTree(subSrc, subDst, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
             changes = addTuples(changes, changes2)
         elif subDst.exists():
-            print("{} is not a directory".format(colored(subDst, "red")))
+            print(f"{colored(subDst, 'red')} is not a directory")
         else:
-            print("{} does not exist".format(colored(subDst, "red")))
+            print(f"{colored(subDst, 'red')} does not exist")
 
     return changes
 
 
 def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
-    srcFiles = filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir())
-    dstFiles = filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir())
+    srcFiles = list(filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir()))
+    dstFiles = list(filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir()))
 
     nChanges = (0, 0, 0, 0, 0)
 
@@ -98,6 +105,17 @@ def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=Fa
     for files in pairs:
         changes =  copyFile(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
         nChanges = addTuples(nChanges, changes)
+
+    # Now determine which files we've dealt with
+    srcMatched, dstMatched = list(zip(*pairs))
+
+    srcMissing = set(srcFiles).difference(srcMatched)
+    dstMissing = set(dstFiles).difference(dstMatched)
+
+    if srcMissing:
+        print(f"Files in source without matching dest: {colored(', '.join(map(str, srcMissing)), 'yellow')}")
+    if dstMissing:
+        print(f"Files in dest without matching source: {colored(', '.join(map(str, dstMissing)), 'yellow')}")
 
     return nChanges
 
@@ -213,11 +231,11 @@ def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
             #print()
         else:
             for (tag, value) in added:
-                print("\tAdding    {:25}: {}".format(tag, value))
+                print(f"\tAdding    {tag:25}: {value}")
             for (tag, frValue, toValue) in replaced:
-                print("\tReplacing {:25}: {} -> {}".format(tag, toValue, frValue))
+                print(f"\tReplacing {tag:25}: {toValue} -> {frValue}")
             for (tag, value) in deleted:
-                print("\tDeleting  {:25}: {}".format(tag, value))
+                print(f"\tDeleting  {tag:25}: {value}")
             for (tag, exception) in errors:
                 print(f"{colored('Error', 'red')} Failed copying tag {colored(tag, 'red')} from {colored(fromPath, 'yellow')} to {colored(toPath, 'yellow')}")
                 print(str(exception))
@@ -227,9 +245,8 @@ def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
             if preserve:
                 os.utime(toPath, times=(times.st_atime, times.st_mtime))
     except Exception as e:
-        print(colored("Error", "red") + " Error processing file {}".format(colored(fromPath, 'yellow')))
+        print(colored("Error", "red") + f" Error processing file {colored(fromPath, 'yellow')}")
         print(str(e))
-        nErrors += 1
         raise e
 
     return (int(changed), counts[0], counts[1], counts[2], counts[3])
@@ -257,11 +274,38 @@ def main():
         sys.exit(1)
     if src.is_dir():
         if args.recurse:
-            nChanges = copyTree(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
+            nChanges = copyTree(src,
+                                dst,
+                                backup=args.backup,
+                                tags=args.tags,
+                                dryrun=args.dryrun,
+                                preserve=args.preserve,
+                                replace=args.replace,
+                                delete=args.delete,
+                                short=args.short,
+                                skiptags=[])
         else:
-            nChanges = copyDir(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
+            nChanges = copyDir(src,
+                               dst,
+                               backup=args.backup,
+                               tags=args.tags,
+                               dryrun=args.dryrun,
+                               preserve=args.preserve,
+                               replace=args.replace,
+                               delete=args.delete,
+                               short=args.short,
+                               skiptags=[])
     else:
-        nChanges = copyFile(src, dst, backup=args.backup, tags=args.tags, dryrun=args.dryrun, preserve=args.preserve, replace=args.replace, delete=args.delete, short=args.short, skiptags=[])
+        nChanges = copyFile(src,
+                            dst,
+                            backup=args.backup,
+                            tags=args.tags,
+                            dryrun=args.dryrun,
+                            preserve=args.preserve,
+                            replace=args.replace,
+                            delete=args.delete,
+                            short=args.short,
+                            skiptags=[])
 
     print("Files Changed: {} Tags Added: {} Tags Replaced: {} Tags Deleted: {} Errors: {}".format(*nChanges))
 
