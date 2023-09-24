@@ -231,7 +231,7 @@ def makeInfo(tag, f, base):
     fullpath = f.absolute()
     path = fullpath if args.fullpath else f.absolute().relative_to(base)
 
-    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath, 'albumdpath': fullpath.parent()}
+    values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath, 'albumdpath': fullpath.parent}
     return values
 
 def getAlbumStats(album):
