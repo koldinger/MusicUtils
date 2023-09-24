@@ -50,14 +50,17 @@ from Utils import isAudio
 VALID_TAGS = sorted([i for i in map(str.upper, music_tag.tags()) if not i.startswith('#')])
 
 class TagArgument:
-    tag   = None
-    value = None
-
     def __init__(self, string):
-        tag, value = string.split("=", 1)
-        print(f"Creating {tag} {value} from {string}")
+        try:
+            tag, value = string.split("=", 1)
+            value=value.strip()
+        except ValueError:
+            tag=string.strip("=")
+            value=None
+
+        #print(f"Creating {tag} {value} from {string}")
         self.tag = checkTag(tag.strip())
-        self.value = value.strip()
+        self.value=value
         if self.tag.startswith('#'):
             raise ArgumentTypeError(f"Cannot set readonly tag {tag}")
 
@@ -103,11 +106,12 @@ def parseArgs():
     printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print encoding details")
     printGroup.add_argument("--alltags", "-A",  type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
-    printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG', default=[], help="Print only if the tag matches (value is a regular expression)")
+    printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
+    printGroup.add_argument('--names', '-N',     type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
 
     andOr = printGroup.add_mutually_exclusive_group()
-    andOr.add_argument("--and", dest='and', action='store_true',  default='True', help="Only print if all values match ")
-    andOr.add_argument("--or",  dest='and', action='store_false', default='True', help="Print if any values match ")
+    andOr.add_argument("--and", dest='andOp', action='store_true',  default='True', help="Only print if all values match ")
+    andOr.add_argument("--or",  dest='andOp', action='store_false', default='True', help="Print if any values match ")
 
 
     parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
@@ -241,9 +245,13 @@ def removeTags(file, preserve, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 
-def printTags(file, tags, alltags, details, printList):
+def printTags(file, tags, alltags, details, names, printList):
     if not checkFile(file):
         return
+    if names:
+        print(file)
+        return
+
     cprint(f"File: {file}", "green")
     data =  loadTags(file)
 
@@ -269,13 +277,14 @@ def qprint(*args):
         print(*args)
 
 def makeRegEx(values):
-    print(values)
     checks = []
     for x in values:
-        regex = re.compile(x.value)
+        value = x.value
+        if value is None:
+            value=".*"
+        regex = re.compile(value)
         checks.append((x.tag, regex))
 
-    print(checks)
     return checks
 
 def checkTagRegEx(data, tag, regex):
@@ -317,8 +326,8 @@ def main():
         else:
             checks = None
         for file in files:
-            if not checks or checkTagsRegEx(file, checks):
-                printTags(file, printtags, args.alltags, args.details, args.lists)
+            if not checks or checkTagsRegEx(file, checks, args.andOp):
+                printTags(file, printtags, args.alltags, args.details, args.names, args.lists)
     elif args.clear:
         # clear all the tags.
         for f in files:
