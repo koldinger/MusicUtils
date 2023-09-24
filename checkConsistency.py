@@ -66,7 +66,7 @@ def splitByDisk(data):
         else:
             num = 0
         disks.setdefault(num, {}).update({i: data[i]})
-    
+
     return disks
 
 def printDetails(details):
@@ -79,25 +79,23 @@ def printDetails(details):
         lines = pprint.pformat(details[v], compact=True, width=120).splitlines()
         report(f"    {names[v]:{maxLen}} {lines[0]}")
         for l in lines[1:]:
-            print(" " * (maxLen + 4), l) 
-
-
+            print(" " * (maxLen + 4), l)
 
 album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork' ]
 disk_tags =  ['disknumber', 'totaltracks']
 
-def checkConsistency(d, details):
-    if not d.is_dir():
+def checkConsistency(directory, details):
+    if not directory.is_dir():
         return
 
-    data =  loadTags(d)
+    data =  loadTags(directory)
 
     if data:
         for t in album_tags:
             tagVals, missing = collectAndCheck(t, data)
             if len(tagVals) > 1:
                 #print(tagVals.keys(), fmtTuples(tagVals.keys()))
-                report(f"Inconsistent {t} values in {d}: {fmtTuples(tagVals.keys())}")
+                report(f"Inconsistent {t} values: {fmtTuples(tagVals.keys())}")
                 if details:
                     printDetails(tagVals)
 
@@ -118,46 +116,44 @@ def checkConsistency(d, details):
                 disks = getValues('disknumber', data)
                 alldisks = set(range(1, num + 1))
                 report(f"Missing disks: {alldisks - disks}")
-        
-        for disk in diskdata:
-            d = diskdata[disk]
+
+        for disk, dData in diskdata.items():
             for tag in disk_tags:
-                tagVals, missing = collectAndCheck(t, d)
+                tagVals, missing = collectAndCheck(t, dData)
                 if len(tagVals) > 1:
                     report(tagVals.keys(), fmtTuples(tagVals.keys()))
                     report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
                     if details:
                         printDetails(tagVals)
                 if missing:
-                    if len(missing) == len(d):
+                    if len(missing) == len(dData):
                         report(f"Missing tag {t} in all files for disk {disk}")
                     else:
                         report(f"Missing tag {t} in files for disk {disk} in {missing}")
-            totaltracks = getValues('totaltracks', d)
+            totaltracks = getValues('totaltracks', dData)
             if len(totaltracks) > 1:
                 report(f"Unable to check number of disks.  Inconsistent values: {list(totaltracks)}")
             elif totaltracks:
                 num = totaltracks.pop()
-                if len(d) != num:
-                    report(f"Number of tracks listed {num} does not match number of tracks {len(d)} for disk {disk}")
-                    tracks = getValues('tracknumber', d)
+                if len(dData) != num:
+                    report(f"Number of tracks listed {num} does not match number of tracks {len(dData)} for disk {disk}")
+                    tracks = getValues('tracknumber', dData)
                     alltracks = set(range(1, num + 1))
                     report(f"Missing tracks: {alltracks - tracks}")
 
-
-__first = True
-__dir = None
+_first = True
+_dir = None
 def setDir(d):
-    global __first, __dir
-    __dir = d
-    __first = True
+    global _first, _dir
+    _dir = d
+    _first = True
 
 def report(string):
-    global __first, __dir
-    if __first:
+    global _first
+    if _first:
         print("-" * 40)
-        print(__dir)
-        __first = False
+        print(_dir)
+        _first = False
     print(string)
 
 @cache
