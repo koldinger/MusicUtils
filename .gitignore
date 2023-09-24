@@ -1,3 +1,7 @@
 tmp
 test*
 output*
+Bankie_Banx
+.DS_Store
+*.swp
+__pycache__
