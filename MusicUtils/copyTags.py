@@ -39,7 +39,7 @@ import music_tag
 
 from termcolor import colored
 
-from Utils import isAudio
+from MusicUtils.Utils import isAudio
 
 class PrintOnce:
     def __init__(self, message):

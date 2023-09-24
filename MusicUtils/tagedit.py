@@ -42,7 +42,7 @@ import yaml
 import music_tag
 from termcolor import cprint, colored
 
-from Utils import isAudio, addTuples
+from MusicUtils.Utils import isAudio, addTuples
 
 ALL_TAGS = list(filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags()))
 

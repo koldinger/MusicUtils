@@ -44,7 +44,7 @@ import music_tag
 from PIL import Image
 from termcolor import cprint, colored
 
-from Utils import isAudio
+from MusicUtils.Utils import isAudio
 
 # Extract the list of valid tags from the music_tags module.
 VALID_TAGS = sorted([i for i in map(str.upper, music_tag.tags()) if not i.startswith('#')])
