@@ -268,7 +268,7 @@ def saveTags(tags, file, format):
         case 'json':
             json.dump(tags, file, indent=4)
         case 'yaml':
-            file.write(yaml.dump(tags))
+            file.write(yaml.dump(tags, allow_unicode=True))
 
 def loadTags(file, format):
     match format:
@@ -307,7 +307,7 @@ def main():
         origTags = promoteTags(origTags)
 
     with tempfile.NamedTemporaryFile("w+") as temp:
-        temp.write(yaml.dump(origTags))
+        temp.write(yaml.dump(origTags, allow_unicode=True))
         temp.flush()
         loaded = False
         if args.edit:
