@@ -98,7 +98,8 @@ def parseArgs():
     setGroup.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
     setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
     setGroup.add_argument("--append", "-a",   type=bool, action=BooleanOptionalAction, default=False, help="Add values to current tag")
-    setGroup.add_argument("--clear", '-C',   type=bool, action=BooleanOptionalAction, default=False, help='Remove all tags')
+    setGroup.add_argument("--clear", '-C',    type=bool, action=BooleanOptionalAction, default=False, help='Remove all tags')
+    setGroup.add_argument("--empty", '-e',    type=bool, action=BooleanOptionalAction, default=False, help='Remove empty tags')
     setGroup.add_argument("--preserve", "-p", type=bool, action=BooleanOptionalAction, default=False, help="Preserve timestamps")
 
     printGroup = parser.add_argument_group("Printing Options")
@@ -178,7 +179,7 @@ def checkFile(file):
 
 stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0 }
 
-def processFile(file, tags, delete, preserve, append, dryrun):
+def processFile(file, tags, delete, preserve, append, empty, dryrun):
     if not checkFile(file):
         return
     qprint(colored(f"Processing file {file}", "green"))
@@ -220,6 +221,14 @@ def processFile(file, tags, delete, preserve, append, dryrun):
         for tag in delete:
             if tag in data:
                 qprint(f"    Removing tag {tag}")
+                data.remove_tag(tag)
+                updated = True
+                stats['deleted'] += 1
+
+    if empty:
+        for tag, value in data.items():
+            if not value:
+                qprint(f"    Removing empty tag {tag}")
                 data.remove_tag(tag)
                 updated = True
                 stats['deleted'] += 1
@@ -316,7 +325,7 @@ def main():
     else:
         files = args.files
 
-    if args.print or not (args.tags or args.delete or args.clear):
+    if args.print or not (args.tags or args.delete or args.clear or args.empty):
         # Printing files.   Compute the tags to print, then print 'em
         printtags = []
         if args.print:
@@ -337,7 +346,7 @@ def main():
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
         for f in files:
-            processFile(f, tags, delete, args.preserve, args.append, args.dryrun)
+            processFile(f, tags, delete, args.preserve, args.append, args.empty, args.dryrun)
         if args.stats:
             print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']}")
 
