@@ -42,7 +42,7 @@ import yaml
 import music_tag
 from termcolor import cprint, colored
 
-from Utils import isAudio, addTuples
+from .Utils import isAudio, addTuples
 
 ALL_TAGS = list(filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags()))
 
@@ -148,32 +148,25 @@ def partitionByTag(data, tag):
     return ret
 
 def promoteAndPartition(tags, fields):
-    try:
-        common, tracks = promoteTags(tags)
+    common, tracks = promoteTags(tags)
 
-        if fields:
-            name, tag = fields.pop(0)
-            groups = partitionByTag(tracks, tag)
-            subData = {}
-            if len(groups) > 1:
-                for grpName, grpTracks in groups.items():
-                    subName, subCommon, sub = promoteAndPartition(grpTracks, fields.copy())
-                    subData[grpName] = { COMMON_TAG: subCommon, subName: sub }
-            else:
-                subName, subCommon, subData = promoteAndPartition(tags, fields.copy())
-                common = common | subCommon
-                name = subName
+    if fields:
+        name, tag = fields.pop(0)
+        groups = partitionByTag(tracks, tag)
+        subData = {}
+        if len(groups) > 1:
+            for grpName, grpTracks in groups.items():
+                subName, subCommon, sub = promoteAndPartition(grpTracks, fields.copy())
+                subData[grpName] = { COMMON_TAG: subCommon, subName: sub }
         else:
-            subData = tracks
-            name = 'tracks'
+            subName, subCommon, subData = promoteAndPartition(tags, fields.copy())
+            common = common | subCommon
+            name = subName
+    else:
+        subData = tracks
+        name = 'tracks'
 
-        return name, common, subData
-    finally:
-        # cprint("-" * 80, 'yellow')
-        # pprint(common, max_string=16)
-        # pprint(list(tracks.keys()), max_string=16)
-        # cprint("-" * 80, 'yellow')
-        pass
+    return name, common, subData
 
 def doPromotion(tags, fields):
     name, common, data = promoteAndPartition(tags, fields)
@@ -228,7 +221,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     for tag in tags:
         try:
             frValue = frTags.get(tag, None)
-            if frValue and not isinstance(frTags, list):
+            if frValue and not isinstance(frValue, list):
                 frValue = [frValue]
 
             # Get the "to" value
@@ -266,6 +259,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
                 nDeleted += 1
                 changed = True
         except Exception as exception:
+            cprint(f"Error setting tag: {tag}: {exception}", "red")
             if details:
                 errors.append((tag, exception))
             nErrors += 1
@@ -364,7 +358,6 @@ def main():
                 try:
                     temp.seek(0)
                     newTags = yaml.load(open(temp.name), yaml.SafeLoader)
-                    #pprint.pprint(newTags)
                     loaded = True
                 except yaml.YAMLError as y:
                     print(f"Error: {y}")
@@ -378,7 +371,6 @@ def main():
         if args.promote and len(origTags) > 1:
             newTags = demoteTags(newTags)
 
-        #pprint.pprint(newTags)
         changedFiles = setTags(newTags, fileData, args.replace, args.delete)
 
         if not args.dryrun:
@@ -394,7 +386,6 @@ def main():
             else:
                 cprint("No changes", "cyan")
 
-        #pprint.pprint(newData, compact=True, width=132)
 
 if __name__ == '__main__':
     try:
