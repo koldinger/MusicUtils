@@ -121,7 +121,7 @@ def checkConsistency(directory, details):
             for tag in disk_tags:
                 tagVals, missing = collectAndCheck(t, dData)
                 if len(tagVals) > 1:
-                    report(tagVals.keys(), fmtTuples(tagVals.keys()))
+                    #report(f"{tagVals.keys()} {fmtTuples(tagVals.keys())}")
                     report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
                     if details:
                         printDetails(tagVals)
@@ -163,8 +163,14 @@ def fmtTuple(x):
     #return "(" + ", ".join(str(x)) + ")"
     return "(" + ", ".join(x) + ")"
 
+@cache
+def quoteComma(x):
+    if ',' in x:
+        return f'"{x}"'
+    return x
+
 def fmtTuples(x):
-    return ", ".join(map(fmtTuple, x))
+    return ", ".join(map(fmtTuple, map(quoteComma, x)))
 
 
 def checkDir(d, details, recurse):
