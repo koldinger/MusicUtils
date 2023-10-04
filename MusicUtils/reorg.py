@@ -193,7 +193,7 @@ def makeComposerString(composers, maxcomps=3):
     if len(listed) > 1:
         string = ",_".join(listed[:-1])
         if len(listed) > 1:
-            string = ",_&_".join([string, listed[-1]])
+            string = "_&_".join([string, listed[-1]])
         if len(unique) > maxcomps:
             string += '_et_al'
     else:
