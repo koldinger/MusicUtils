@@ -36,13 +36,13 @@ import os
 import sys
 import json
 
-from collections import Counter
+from collections import Counter, defaultdict
 
 import yaml
 import music_tag
 from termcolor import cprint, colored
 
-from MusicUtils.Utils import isAudio, addTuples
+from Utils import isAudio, addTuples
 
 ALL_TAGS = list(filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags()))
 
@@ -119,33 +119,82 @@ def listToTuple(x):
         return tuple(x)
     return x
 
+COMMON_TAG = 'common'
+TRACK_TAG = 'tracks'
 def promoteTags(tags):
     consolidated = {}
-    album = {}
-    albumTags = {}
-    numAlbums = len(tags)
+    grpTags = {}
+    grpSize = len(tags)
     for tag in ALL_TAGS:
         consolidated = consolidateTag(tags, tag)
         # Check that there's only 1 tag
         if len(consolidated) == 1:
             item = consolidated.popitem()
             # And that it's in every file
-            if item[1] == numAlbums:
-                albumTags[tag] = tupleToList(item[0])
+            if item[1] == grpSize:
+                grpTags[tag] = tupleToList(item[0])
                 for i in tags:
                     if tag in tags[i]:
                         del tags[i][tag]
-    album['tracks'] = tags
-    album['tags'] = albumTags
+    return grpTags, tags
 
-    return album
+def partitionByTag(data, tag):
+    if isinstance(tag, tuple):
+        tag = tag[0]
+    ret = defaultdict(dict)
+    for i, track in data.items():
+        tagVal = track.get(tag, None)
+        ret[tagVal][i] = track
+    return ret
 
-def demoteTags(album):
-    tracks = album['tracks']
-    tags = album['tags']
-    for i in tracks:
-        tracks[i] = tags | tracks[i]
-    return tracks
+def promoteAndPartition(tags, fields):
+    try:
+        common, tracks = promoteTags(tags)
+
+        if fields:
+            name, tag = fields.pop(0)
+            groups = partitionByTag(tracks, tag)
+            subData = {}
+            if len(groups) > 1:
+                for grpName, grpTracks in groups.items():
+                    subName, subCommon, sub = promoteAndPartition(grpTracks, fields.copy())
+                    subData[grpName] = { COMMON_TAG: subCommon, subName: sub }
+            else:
+                subName, subCommon, subData = promoteAndPartition(tags, fields.copy())
+                common = common | subCommon
+                name = subName
+        else:
+            subData = tracks
+            name = 'tracks'
+
+        return name, common, subData
+    finally:
+        # cprint("-" * 80, 'yellow')
+        # pprint(common, max_string=16)
+        # pprint(list(tracks.keys()), max_string=16)
+        # cprint("-" * 80, 'yellow')
+        pass
+
+def doPromotion(tags, fields):
+    name, common, data = promoteAndPartition(tags, fields)
+    return { COMMON_TAG: common, name: data }
+
+def demoteTags(data, includeTags=None):
+    common = data.pop(COMMON_TAG, None)
+    if common is None:
+        common = {}
+    if includeTags:
+        common =  includeTags | common
+    demoted = {}
+
+    for name, sub in data.items():
+        if name == TRACK_TAG:
+            for i in sub:
+                demoted[i] = common | sub[i]
+        else:
+            demoted |= demoteTags(sub, common)
+
+    return demoted
 
 
 def copyTags(frTags, toTags, tags, replace, delete, details=None):
@@ -288,7 +337,6 @@ def confirm(prompt, default='y'):
             return False
 
 def main():
-    global beQuiet
     args = parseArgs()
 
     fileData = list(loadFiles(args.files))
@@ -304,7 +352,7 @@ def main():
 
     # If we're using the "promotion" feature, promote all and disc values
     if args.promote and len(origTags) > 1:
-        origTags = promoteTags(origTags)
+        origTags = doPromotion(origTags, [('albums', 'album'), ('discs', 'discnumber'), ('works', 'work')])
 
     with tempfile.NamedTemporaryFile("w+") as temp:
         temp.write(yaml.dump(origTags, allow_unicode=True))
@@ -330,6 +378,7 @@ def main():
         if args.promote and len(origTags) > 1:
             newTags = demoteTags(newTags)
 
+        #pprint.pprint(newTags)
         changedFiles = setTags(newTags, fileData, args.replace, args.delete)
 
         if not args.dryrun:
