@@ -81,7 +81,7 @@ def printDetails(details):
         for l in lines[1:]:
             print(" " * (maxLen + 4), l)
 
-album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork' ]
+album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork', 'media' ]
 disk_tags =  ['disknumber', 'totaltracks']
 
 def checkConsistency(directory, details):
