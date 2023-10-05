@@ -40,7 +40,7 @@ def parseArgs():
     #parser.add_argument('--test', '-t', metavar="(-100 to 100)", choices=range(-100, 100), help="Test")
     parser.add_argument('--save', '-S', dest='save', help='Save the database to a CSV file')
     parser.add_argument('--load', '-L', dest='load', help='Preload the database from a CSV file before parsing other files')
-    parser.add_argument('dirs', nargs="*", help='Base directories to catalog')
+    parser.add_argument('dirs', nargs="*", type=pathlib.Path, help='Base directories to catalog')
     args = parser.parse_args()
     return args
 
@@ -229,7 +229,7 @@ def makeInfo(tag, f, base):
     isize, size = getSize(tag)
 
     fullpath = f.absolute()
-    path = fullpath if args.fullpath else f.absolute().relative_to(base)
+    path = str(fullpath) if args.fullpath else str(f.absolute().relative_to(base))
 
     values = {"artist": artist, "albumartist": albartist, "album": album, "title": title, "path": path, "duration": duration, 'format': frmt, 'genre': genre, 'track': track, 'disk': disk, 'size': size, 'isize': isize, 'fullpath': fullpath, 'albumdpath': fullpath.parent}
     return values
@@ -314,7 +314,8 @@ def main():
     initLogging()
     #print(args.fields)
 
-    dirs = [pathlib.Path(x) for x in args.dirs]
+    #dirs = [pathlib.Path(x) for x in args.dirs]
+    dirs = args.dirs
     if args.base:
         base = pathlib.Path(args.base)
         if not base.is_dir():
