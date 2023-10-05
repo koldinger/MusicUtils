@@ -44,7 +44,7 @@ from termcolor import cprint, colored
 
 from .Utils import isAudio, addTuples
 
-ALL_TAGS = list(filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags()))
+ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags())))
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Edit the tags in a collect of files")
@@ -218,8 +218,13 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     if details:
         (added, replaced, deleted, errors) = details
 
+    for tag in frTags.keys():
+        if not tag in ALL_TAGS:
+            cprint(f"Unknown tag {tag} for file {toTags.filename}", "red")
+
     for tag in tags:
         try:
+
             frValue = frTags.get(tag, None)
             if frValue and not isinstance(frValue, list):
                 frValue = [frValue]
@@ -285,7 +290,7 @@ def setTags(newData, currentData, replace, delete):
     nChanged = 0
     results = []
     fChanged = []
-    for file in currentData:
+    for file in sorted(currentData, key=lambda x: x.filename):
         details = ([], [], [], [])
 
         try:
@@ -303,7 +308,7 @@ def setTags(newData, currentData, replace, delete):
         (added, replaced, deleted, errors) = addTuples(*results)
         print(f"Files Changed: {nChanged} Tags Added: {added} Tags Changed: {replaced} Tags Deleted: {deleted} Errors: {errors}")
     if fChanged:
-        print(f"Changed: {sorted(fChanged)}")
+        print(f"Changed: {pprint.pformat(sorted(fChanged), compact=True)}")
     return fChanged
 
 def saveTags(tags, file, format):
@@ -360,8 +365,10 @@ def main():
                     newTags = yaml.load(open(temp.name), yaml.SafeLoader)
                     loaded = True
                 except yaml.YAMLError as y:
-                    print(f"Error: {y}")
-                    loaded = True  #
+                    cprint(f"Error parsing edited file:", "red")
+                    cprint(str(y), "yellow")
+                    if not confirm("Edit again: [Y/n]: "):
+                        return
         else:
             newTags = origTags
 
