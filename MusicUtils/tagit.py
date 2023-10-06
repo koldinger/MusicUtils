@@ -34,22 +34,30 @@ import shutil
 import os
 import textwrap
 import re
+import json
+import csv
 
 from functools import lru_cache, partial
-from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter
+from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter, FileType
 from hashlib import md5
 
 import magic
 import music_tag
+import yaml
 from PIL import Image
 from termcolor import cprint, colored
 
 from MusicUtils.Utils import isAudio
 
-# Extract the list of valid tags from the music_tags module.
-VALID_TAGS = sorted([i for i in map(str.upper, music_tag.tags()) if not i.startswith('#')])
+# Extract the list of valid tags from the music_tag module.
+ALL_TAGS = sorted(music_tag.tags())
+VALID_TAGS = sorted([i for i in map(str.upper, ALL_TAGS) if not i.startswith('#')])
 
 class TagArgument:
+    """
+    Creates an argument with two fields, tag and value, based on a equals sign (=) in
+    the input.
+    """
     def __init__(self, string):
         try:
             tag, value = string.split("=", 1)
@@ -68,6 +76,9 @@ def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
 
 def backupFile(path):
+    """
+    Backup a file before processing it.
+    """
     bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
     print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
@@ -81,6 +92,9 @@ def makeTagValues(tags):
     return ret
 
 def checkTag(tag):
+    """
+    Make sure a tag is in a list of the valid tags that can be set.
+    """
     tag = tag.upper()
     if not tag.upper() in VALID_TAGS:
         raise ArgumentTypeError(f"{tag} is not a valid tag")
@@ -104,16 +118,24 @@ def parseArgs():
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
-    printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print encoding details")
-    printGroup.add_argument("--alltags", "-A",  type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
+    printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print tags, including read-only encoding details (starts with #)")
+    printGroup.add_argument("--all", "-A",      type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
-    printGroup.add_argument('--names', '-N',     type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
+    printGroup.add_argument('--names', '-N',    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
+
 
     andOr = printGroup.add_mutually_exclusive_group()
     andOr.add_argument("--and", dest='andOp', action='store_true',  default='True', help="Only print if all values match ")
     andOr.add_argument("--or",  dest='andOp', action='store_false', default='True', help="Print if any values match ")
 
+    saveGroup = parser.add_argument_group("Tag Saving Options (not in music file)")
+    saveGroup.add_argument('--save', '-S',     type=FileType('w'), default=None, help="Save tags to a file")
+    saveGroup.add_argument('--format', '-F',   type=str, choices=['json', 'yaml', 'csv'], default='yaml', help="Format to use when saving files")
+
+    pathGroup = saveGroup.add_mutually_exclusive_group()
+    pathGroup.add_argument('--relative', '-R', type=pathlib.Path, default='.', help="Print paths relative to this directory")
+    pathGroup.add_argument('--fullpath',       type=bool, action=BooleanOptionalAction, default=False, help="Use full paths")
 
     parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--stats", "-s",    type=bool, action=BooleanOptionalAction, default=False, help="Print stats")
@@ -129,6 +151,9 @@ def parseArgs():
     return parser.parse_args()
 
 def flatten(l):
+    """
+    Flatten nested sublists to all be a single list.
+    """
     if isinstance(l, list):
         return [num for sublist in l for num in sublist]
     return l
@@ -145,6 +170,10 @@ def readfile(name):
 
 @lru_cache(maxsize=64)
 def imageInfo(name):
+    """
+    Read an image file, and generate it's image info
+
+    """
     data = readfile(name)
     mime = magic.from_buffer(data, mime=True)
     image = Image.open(name)
@@ -179,12 +208,14 @@ def checkFile(file):
 
 stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0 }
 
-def processFile(file, tags, delete, preserve, append, empty, dryrun):
+def processFile(file, tags, delete, preserve, append, empty, dryrun, save):
     if not checkFile(file):
         return
+
     qprint(colored(f"Processing file {file}", "green"))
     data = loadTags(file)
     updated = False
+
 
     stats['processed'] += 1
     times = file.stat()
@@ -240,7 +271,10 @@ def processFile(file, tags, delete, preserve, append, empty, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
+    return data
+
 def removeTags(file, preserve, dryrun):
+    """ Remove all tags from the file """
     if not checkFile(file):
         return
     times = file.stat()
@@ -254,9 +288,22 @@ def removeTags(file, preserve, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 
-def printTags(file, tags, alltags, details, names, printList):
+def printTags(file, tags, empty, details, names, printList, save):
+    """
+    Print tags from a file.
+
+    Parameters:
+    file (Path):        file to load tags from and to print.
+    tags (list[str]):   list of tags to print
+    empty   (bool):     print all the tags, even those with empty/no value
+    details (bool):     include those that start with a # sign
+    names   (bool):     Only printh the name of the file
+    printList(bool):    Print all elements of a list together
+    save    (bool):     Save the tags for later processing
+    """
     if not checkFile(file):
         return
+
     if names:
         print(file)
         return
@@ -265,23 +312,59 @@ def printTags(file, tags, alltags, details, names, printList):
     data =  loadTags(file)
 
     for tag in map(str.upper, sorted(data.tags())):
-        if tags and not tag in tags and not alltags:
-            continue
-        if tag.startswith('#') and not (alltags or details):
-            continue
         try:
-            if data[tag] or alltags:
+            if tags and not tag in tags:
+                continue
+            if tag.startswith('#') and not details:
+                continue
+            if data[tag] or empty:
                 if printList:
                     print(f"{tag:27}: {data[tag]}")
                 else:
                     for i in data[tag].values:
                         print(f"{tag:27}: {i}")
         except Exception as e:
-            cprint(f"Caught exception: {e}", 'red')
+            cprint(f"Caught exception processing tag {tag}: {e}", 'red')
+    return data
 
+savedData={}
+def saveTags(file, tagData, fullpath, relative):
+    """
+    Accumulate data to save a json/yaml/csv catalog file.
+
+    Parameters:
+    file (Path): Path of the file we're processing
+    tagData(dict):  Tag data to save.
+    fullpath(bool): Use full pathnames
+    relative(Path): Print files relative to this path
+    """
+
+    if fullpath:
+        file = file.absolute()
+    elif relative:
+        try:
+            file = file.absolute().relative_to(relative.absolute())
+        except ValueError:
+            pass
+
+    data = {}
+    for tag in tagData.tags():
+        d = tagData.get(tag).values
+        if len(d) == 0:
+            continue
+
+        if len(d) == 1 and tag.lower() != 'artwork':
+            # Ignore artwork, it will get converted to a string below.   We mostly want to keep Int's valid here.
+            d = d[0]
+        else:
+            d = ", ".join(map(str, d))
+
+        data[tag] = d
+    savedData[str(file)] = data
 
 beQuiet = False
 def qprint(*args):
+    """ Print as long as we're not expected to be quiet """
     if not beQuiet:
         print(*args)
 
@@ -336,7 +419,9 @@ def main():
             checks = None
         for file in files:
             if not checks or checkTagsRegEx(file, checks, args.andOp):
-                printTags(file, printtags, args.alltags, args.details, args.names, args.lists)
+                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
+                if args.save and data:
+                    saveTags(file, data, args.fullpath, args.relative)
     elif args.clear:
         # clear all the tags.
         for f in files:
@@ -345,10 +430,27 @@ def main():
         # Else we're setting tags.
         tags = makeTagValues(flatten(args.tags))
         delete = flatten(args.delete)
-        for f in files:
-            processFile(f, tags, delete, args.preserve, args.append, args.empty, args.dryrun)
+        for file in files:
+            data = processFile(file, tags, delete, args.preserve, args.append, args.empty, args.dryrun, args.save)
+            if args.save and data:
+                saveTags(file, data, args.fullpath, args.relative)
+
         if args.stats:
             print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']}")
+
+    if args.save:
+        match args.format:
+            case 'json':
+                json.dump(savedData, args.save, indent=4)
+            case 'yaml':
+                args.save.write(yaml.dump(savedData, allow_unicode=True))
+            case 'csv':
+                writer = csv.DictWriter(args.save, fieldnames=['name'] + ALL_TAGS)
+                writer.writeheader()
+                for i in sorted(savedData.keys()):
+                    row = savedData[i]
+                    row['name'] = str(i)
+                    writer.writerow(row)
 
 
 if __name__ == '__main__':
