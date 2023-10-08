@@ -189,7 +189,7 @@ def printDatabase():
         else:
             for album in sorted(albums.keys()):
                 tracks = albums[album]
-                print(tracks)
+                #print(tracks)
                 if args.level == 'album':
                     printAlbumInfo(artist, album, tracks, fmt)
                 else:
