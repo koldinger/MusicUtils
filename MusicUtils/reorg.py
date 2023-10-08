@@ -36,7 +36,7 @@ import logging
 import pathlib
 import unicodedata
 import shutil
-from collections import Counter
+from collections import Counter, defaultdict
 
 import regex as re
 
@@ -457,16 +457,18 @@ def main():
     args = processArgs()
     log = initLogging()
 
+    bases = defaultdict(lambda: args.base)
+
     if args.split:
         # Create a dict of {codec: path, ...} from array [codec=path, codec=path, ...]
-        bases = dict(map(lambda y: [y[0].lower(), y[1]], map(lambda x: x.split("="), args.bases)))
-    else:
-        # Don't create the list, allow the default base dir to be used
-        bases = {}
+        #bases = dict(map(lambda y: [y[0].lower(), pathlib.Path(y[1])], map(lambda x: x.split("="), args.bases)))
+        for t, p in map(lambda y: [y[0].lower(), pathlib.Path(y[1])], map(lambda x: x.split("="), args.bases)):
+            if not p.is_absolute():
+                p = args.base.joinpath(p)
+            bases[t] = p
 
     for file in args.files:
         try:
-            #p = pathlib.Path(name)
             if not file.exists():
                 log.error(f"{file} doesn't exist")
             elif file.is_dir():
