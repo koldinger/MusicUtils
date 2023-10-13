@@ -102,20 +102,24 @@ def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=Fa
     if pairs:
         print(f"Processing directory: {colored(srcDir, 'cyan')} into {colored(dstDir, 'cyan')}")
 
-    for files in pairs:
-        changes =  copyFile(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
-        nChanges = addTuples(nChanges, changes)
+        for files in pairs:
+            changes =  copyFile(files[0], files[1], backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
+            nChanges = addTuples(nChanges, changes)
 
-    # Now determine which files we've dealt with
-    srcMatched, dstMatched = list(zip(*pairs))
+        # Now determine which files we've dealt with
+        srcMatched, dstMatched = list(zip(*pairs))
 
-    srcMissing = set(srcFiles).difference(srcMatched)
-    dstMissing = set(dstFiles).difference(dstMatched)
+        srcMissing = set(srcFiles).difference(srcMatched)
+        dstMissing = set(dstFiles).difference(dstMatched)
 
-    if srcMissing:
-        print(f"Files in source without matching dest: {colored(', '.join(map(str, srcMissing)), 'yellow')}")
-    if dstMissing:
-        print(f"Files in dest without matching source: {colored(', '.join(map(str, dstMissing)), 'yellow')}")
+        if srcMissing:
+            print(f"Files in source without matching dest: {colored(', '.join(map(str, srcMissing)), 'yellow')}")
+        if dstMissing:
+            print(f"Files in dest without matching source: {colored(', '.join(map(str, dstMissing)), 'yellow')}")
+    elif srcFiles:
+        print(f"Error: No files matched between: {srcDir} and {dstDir}")
+        print(f"Source Files: {sorted(map(lambda x: x.name, srcFiles))}")
+        print(f"Target Files: {sorted(map(lambda x: x.name, dstFiles))}")
 
     return nChanges
 
