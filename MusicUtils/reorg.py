@@ -37,6 +37,7 @@ import pathlib
 import unicodedata
 import shutil
 from collections import Counter, defaultdict
+from functools import reduce
 
 import regex as re
 
@@ -79,7 +80,7 @@ def processArgs():
                         help='Hard link the files')
     action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,
                         help='Copy the files')
-    action.add_argument('--slink', dest='action', action='store_const', const=ACTION_SYMLINK,
+    action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=ACTION_SYMLINK,
                         help='Symbolic link the files')
 
     parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,
@@ -115,6 +116,8 @@ def processArgs():
     parser.add_argument('--unknown', dest='unknown', default=True, action=argparse.BooleanOptionalAction,
                         help="Ignore 'unknown' files without artist or album info")
 
+    parser.add_argument('--warn-non-audio', dest='warnNonAudio', default=False, action=argparse.BooleanOptionalAction,
+                        help="Ignore non-audio files")
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
                         help='Increase the verbosity')
 
@@ -134,7 +137,8 @@ def munge(name):
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~\p{P}]', '', name)
     #name = re.sub(r'[^\w\s,]', '', name)
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
-    name = re.sub(r'[\p{Punct}\p{Cntrl}]', '', name)
+    name = re.sub(r'[^\P{Punct}-,_]', '', name)
+    name = re.sub(r'[\p{Cntrl}]', '', name)
     name = re.sub(r'\s', '_', name)
     name = re.sub(r'_+', '_', name)
     if not args.useArticle:
@@ -142,6 +146,11 @@ def munge(name):
     name = name.strip('_')
     return name
 
+
+def longestName(files):
+    if files:
+        return reduce(max, map(lambda x: len(str(x)), files))
+    return 0
 
 def noSlash(tag):
     if tag.find('/') != -1:
@@ -258,12 +267,14 @@ def makeName(file, tags, dirname = None):
     log.debug(f"FullName {file} -> {newFile}")
     return newFile
 
-def dragFiles(dragfiles, destdir):
+def dragFiles(dragfiles, destdir, length):
     action = actionName()
+    if not length:
+        length = longestName(dragFiles)
     for file in dragfiles:
         dest = destdir.joinpath(file.name)
         if file.exists() and not dest.exists():
-            log.log(logging.ACTION, f"{action} {file}\t==>  {dest}")
+            log.log(logging.ACTION, f"{action} {str(file):{length}}\t==>  {dest}")
             doMove(file, dest)
 
 def doMove(src, dest):
@@ -301,8 +312,10 @@ def actionName():
     return name
 
 
-def renameFile(file, tags, dragfiles=None, dirname=None):
+def renameFile(file, tags, dragfiles=None, dirname=None, length=0):
     action = actionName()
+    if not length:
+        length = len(str(file))
     try:
         dest = makeName(file, tags, dirname)
         if dest is None:
@@ -323,13 +336,14 @@ def renameFile(file, tags, dragfiles=None, dirname=None):
             return dest
 
 
-        log.log(logging.ACTION, f"{action} {file}\t==>  {dest}")
+        log.log(logging.ACTION, f"{action} {str(file):{length}s} \t==>  {dest}")
 
         doMove(file, dest)
 
         return dest
     except NotAudioException as exc:
-        log.warning(exc)
+        if args.warnNonAudio:
+            log.warning(exc)
         return None
     except AttributeError as exc:
         log.warning(exc)
@@ -366,6 +380,7 @@ def reorgDir(directory):
         dragfiles = []
         destdirs = Counter()
         files = sorted(filter(lambda x: not x.name.startswith('.'), list(directory.iterdir())))
+        maxLen = longestName(files)
 
         composerStr = None
 
@@ -384,7 +399,8 @@ def reorgDir(directory):
                             composers.add(classicalArtist(tags))
 
             except NotAudioException as exc:
-                log.warning(exc)
+                if args.warnNonAudio:
+                    log.warning(exc)
             except Exception as exc:
                 log.warning(f"Caught exception processing {file}: {exc}")
                 log.exception(exc)
@@ -393,10 +409,10 @@ def reorgDir(directory):
             composerStr = makeComposerString(composers)
 
         for finfo in audio:
-            dest = renameFile(finfo[0], finfo[1], dragfiles=dragfiles, dirname=composerStr)
+            dest = renameFile(finfo[0], finfo[1], dragfiles=dragfiles, dirname=composerStr, length=maxLen)
             if dest:
                 if not dest.parent in destdirs:
-                    dragFiles(dragfiles, dest.parent)
+                    dragFiles(dragfiles, dest.parent, maxLen)
                 destdirs[dest.parent] += 1
 
         if len(destdirs) > 1:
@@ -467,6 +483,8 @@ def main():
                 p = args.base.joinpath(p)
             bases[t] = p
 
+    maxLength = longestName(args.files)
+
     for file in args.files:
         try:
             if not file.exists():
@@ -475,7 +493,7 @@ def main():
                 reorgDir(file)
             elif file.is_file():
                 tags = getTags(file)
-                renameFile(file, tags)
+                renameFile(file, tags, length=maxLength)
         except KeyboardInterrupt:
             log.info("Aborting")
         except Exception as exc:
