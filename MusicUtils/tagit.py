@@ -287,6 +287,18 @@ def removeTags(file, preserve, dryrun):
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
+orderedTags = {
+    'title': '00',
+    'album': '01',
+    'artist': '02',
+    'tracknumber': '03',
+    'discnumber': '03',
+    'discsubtitle': '04'
+    }
+
+def tagKey(key):
+    return orderedTags.get(key.lower(), '99') + key
+
 
 def printTags(file, tags, empty, details, names, printList, save):
     """
@@ -311,7 +323,7 @@ def printTags(file, tags, empty, details, names, printList, save):
     cprint(f"File: {file}", "green")
     data =  loadTags(file)
 
-    for tag in map(str.upper, sorted(data.tags())):
+    for tag in map(str.upper, sorted(data.tags(), key=tagKey)):
         try:
             if tags and not tag in tags:
                 continue
