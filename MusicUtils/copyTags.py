@@ -128,8 +128,8 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     """ 
     Perform the actual copy of tags from one set to another.
     Arguments:
-        frTags: The set of tags to copy from.   music_tags.MediaInfo
-        toTags: The set of tags to copy to.     music_tags.MediaInfo
+        frTags: The set of tags to copy from.   music_tags.AudioFile
+        toTags: The set of tags to copy to.     music_tags.AudioFile
         tags:   A list of tag names to copy.    list[str]
         replace: Boolean, replace tags if they are in the target.  If false, don't overwrite existing tags
         delete:  Boolean.  If true, delete tags that exist in toTags (and tags), but not in frTags
