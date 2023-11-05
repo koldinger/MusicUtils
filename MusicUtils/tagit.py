@@ -47,6 +47,8 @@ import yaml
 from PIL import Image
 from termcolor import cprint, colored
 
+from  icecream import ic
+
 from MusicUtils.Utils import isAudio
 
 # Extract the list of valid tags from the music_tag module.
@@ -216,35 +218,52 @@ def processFile(file, tags, delete, preserve, append, empty, dryrun, save):
     data = loadTags(file)
     updated = False
 
-
     stats['processed'] += 1
     times = file.stat()
     for tag in tags:
-        if tag.lower() == 'artwork':
-            values = map(readfile, tags[tag])
-        else:
-            values = tags[tag]
         try:
-            curVals = set(data[tag].values)
+            if tag.lower() == 'artwork':
+                values = map(readfile, tags[tag])
+            else:
+                values = tags[tag]
+
+            try:
+                curVals = set(data[tag].values)
+            except ValueError as e:
+                cprint(f'{e}: zeroing', 'red')
+                curVals = set()
+
+            # If current values, we've changed it, else adding a tag.
             action = 'changed' if curVals else 'added'
-            if values != set(data[tag].values):
+            # Generate the new set of values
+            if append:
+                newVals = list(set(values).union(curVals))
+            else:
+                newVals = list(values)
+
+            if set(newVals) == curVals:
+                # if nothing has changed, skip it.
+                continue
+
+            if tag.lower() == 'artwork':
+                # If we're doing artwork, generate a readable version and print it, other than the raw value
                 if append:
-                    newVals = list(set(values).union(curVals))
+                    vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values)))
                 else:
-                    newVals = list(values)
-                if tag.lower() == 'artwork':
-                    if append:
-                        vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values)))
-                    else:
-                        vals = list(map(imageInfo, tags[tag]))
-                    qprint(f"    Setting tag {tag.upper()} to {vals}")
-                else:
-                    qprint(f"    Setting tag {tag.upper()} to {newVals}")
-                data[tag.upper()] = list(newVals)
-                stats[action] += 1
-                updated = True
+                    vals = list(map(imageInfo, tags[tag]))
+                qprint(f"    Setting tag {tag.upper()} to {vals}")
+            else:
+                # Otherwise, just print the new values
+                qprint(f"    Setting tag {tag.upper()} to {newVals}")
+
+            # And save it.
+            data[tag.upper()] = newVals
+            stats[action] += 1
+            updated = True
         except KeyError as k:
             cprint(f'Invalid tag name {k}', 'red')
+        except FileNotFoundError as e:
+            cprint(f'Could not read artwork file {e.filename}')
         except ValueError as v:
             cprint(v, 'red')
 
