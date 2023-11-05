@@ -218,7 +218,8 @@ def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun
             tags = list(filter(lambda x: not x.startswith('#') and not x in skiptags, set(toTags.tags()).union(frTags.tags())))
 
         changed, counts = copyTags(frTags, toTags, tags, replace, delete, results)
-        print(f"{colored('Copying tags from', 'yellow')} {colored(fromPath, 'green')} to {colored(toPath, 'green')}")
+        if changed:
+            print(f"{colored('Copying tags from', 'yellow')} {colored(fromPath, 'green')} to {colored(toPath, 'green')}")
 
         if short:
             if added:
