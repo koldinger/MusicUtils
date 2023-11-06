@@ -83,6 +83,8 @@ def processArgs():
     action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=ACTION_SYMLINK,
                         help='Symbolic link the files')
 
+    parser.add_argument('--recurse', default=True, dest='recurse', action=argparse.BooleanOptionalAction, 
+                        help='Recurse into directories' + _def)
     parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,
                         help='Rename files.  If false, only')
     parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],
@@ -371,7 +373,7 @@ def classicalArtist(tags):
         return tags.get('artist').first
     return None
 
-def reorgDir(directory):
+def reorgDir(directory, recurse):
     try:
         log.info(f"Processing Directory {directory}")
         dirs = []
@@ -420,8 +422,9 @@ def reorgDir(directory):
             for targ in destdirs:
                 log.warning(f"    {targ}: {destdirs[targ]} file(s)")
 
-        for subdir in dirs:
-            reorgDir(subdir)
+        if recurse:
+            for subdir in dirs:
+                reorgDir(subdir, recurse)
 
         if args.cleanup:
             if dragfiles:
@@ -490,7 +493,7 @@ def main():
             if not file.exists():
                 log.error(f"{file} doesn't exist")
             elif file.is_dir():
-                reorgDir(file)
+                reorgDir(file, args.recurse)
             elif file.is_file():
                 tags = getTags(file)
                 renameFile(file, tags, length=maxLength)
