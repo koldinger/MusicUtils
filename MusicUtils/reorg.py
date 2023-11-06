@@ -121,7 +121,7 @@ def processArgs():
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
                         help='Increase the verbosity')
 
-    parser.add_argument('files', nargs='*', type=pathlib.Path, default=[pathlib.Path('.')],
+    parser.add_argument('files', nargs='+', type=pathlib.Path,
                         help='List of files/directories to reorganize')
 
     return parser.parse_args()
