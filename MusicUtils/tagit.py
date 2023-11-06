@@ -36,6 +36,7 @@ import textwrap
 import re
 import json
 import csv
+import sys
 
 from functools import lru_cache, partial
 from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter, FileType
@@ -46,6 +47,8 @@ import music_tag
 import yaml
 from PIL import Image
 from termcolor import cprint, colored
+
+from icecream import ic
 
 from MusicUtils.Utils import isAudio
 
@@ -72,6 +75,12 @@ class TagArgument:
         if self.tag.startswith('#'):
             raise ArgumentTypeError(f"Cannot set readonly tag {tag}")
 
+    def __str__(self):
+        return f"{self.tag}={self.value}"
+
+    def __repr__(self):
+        return f"{self.tag}={self.value}"
+
 def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
 
@@ -91,14 +100,18 @@ def makeTagValues(tags):
             ret.setdefault(t.tag, set()).add(t.value)
     return ret
 
-def checkTag(tag):
+def checkTag(tag, additional=None):
     """
     Make sure a tag is in a list of the valid tags that can be set.
     """
-    tag = tag.upper()
-    if not tag.upper() in VALID_TAGS:
+    tup = tag.upper()
+
+    if not (tup in VALID_TAGS or (additional and tup in additional)):
         raise ArgumentTypeError(f"{tag} is not a valid tag")
-    return tag
+    return tup
+
+def checkTagAll(tag):
+    return checkTag(tag, additional=['ALL'])
 
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"+\
@@ -110,10 +123,12 @@ def parseArgs():
                             formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
     setGroup.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
-    setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', help='List of tags to delete.   Ex: --delete artist artistsort')
+    setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', metavar='TAG', help='List of tags to delete.   Ex: --delete artist artistsort')
     setGroup.add_argument("--append", "-a",   type=bool, action=BooleanOptionalAction, default=False, help="Add values to current tag")
     setGroup.add_argument("--clear", '-C',    type=bool, action=BooleanOptionalAction, default=False, help='Remove all tags')
     setGroup.add_argument("--empty", '-e',    type=bool, action=BooleanOptionalAction, default=False, help='Remove empty tags')
+    setGroup.add_argument("--split",          type=checkTagAll, nargs='*', action='append', metavar='TAG', default=None, help='List of tags to apply splitting to')
+    setGroup.add_argument("--splitchars",     type=str,  default=';/', help='List of characters to use to split tags')
     setGroup.add_argument("--preserve", "-p", type=bool, action=BooleanOptionalAction, default=False, help="Preserve timestamps")
 
     printGroup = parser.add_argument_group("Printing Options")
@@ -172,7 +187,6 @@ def readfile(name):
 def imageInfo(name):
     """
     Read an image file, and generate it's image info
-
     """
     data = readfile(name)
     mime = magic.from_buffer(data, mime=True)
@@ -191,7 +205,7 @@ def checkFile(file):
     """
     Check to determine if a file exists, and is an audio file.
     :param file:
-    :return:
+    :return: True if it exists and is audio, false otherwise
     """
     try:
         if file.is_dir():
@@ -206,16 +220,28 @@ def checkFile(file):
     return True
 
 
-stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0 }
+stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0, 'split': 0 }
 
-def processFile(file, tags, delete, preserve, append, empty, dryrun, save):
+def processFile(file, tags, splits, delete, preserve, append, empty, splitchars, dryrun):
+    """
+    Process a file, changing the tags appropriately
+
+    Parameters:
+       file: A Path object pointing to the file in question.
+       tags: A list of TagArguments for tags to 
+       delete: A list of tags to delete
+       preserve: Boolean, preserve the timestamps
+       append: Boolean, append new values to current list.  If false, current values will be kept
+       empty: Delete empty tags
+       splitchars: String, containing the characters to split on
+       dryrun: Boolean, if true, don't write output, only process and test.
+    """
     if not checkFile(file):
         return
 
     qprint(colored(f"Processing file {file}", "green"))
     data = loadTags(file)
     updated = False
-
 
     stats['processed'] += 1
     times = file.stat()
@@ -245,6 +271,25 @@ def processFile(file, tags, delete, preserve, append, empty, dryrun, save):
                 updated = True
         except KeyError as k:
             cprint(f'Invalid tag name {k}', 'red')
+        except ValueError as v:
+            cprint(v, 'red')
+
+    splitpat = f"[{splitchars}]"
+    for tag in splits:
+        if tag.lower() == 'artwork':
+            continue
+        try:
+            curVals = set(map(str, data[tag].values))
+            newVals = set()
+            for val in curVals:
+                sub = set(map(str.strip, re.split(splitpat, str(val))))
+                newVals = newVals.union(sub)
+            if newVals != curVals:
+                newVals = list(newVals)
+                qprint(f"    Splitting tag {tag} to {newVals}")
+                data[tag.upper()] = list(newVals)
+                updated = True
+                stats['split'] += 1
         except ValueError as v:
             cprint(v, 'red')
 
@@ -381,14 +426,21 @@ def qprint(*args):
         print(*args)
 
 def makeRegEx(values):
+    errors = False
     checks = []
     for x in values:
         value = x.value
         if value is None:
             value=".*"
-        regex = re.compile(value)
-        checks.append((x.tag, regex))
+        try:
+            regex = re.compile(value)
+            checks.append((x.tag, regex))
+        except re.error as e:
+            cprint(f"Invaid expression {value}: {e}", "red")
+            errors = True
 
+    if errors:
+        raise ValueError(f"Invalid value expression: {values}")
     return checks
 
 def checkTagRegEx(data, tag, regex):
@@ -420,13 +472,17 @@ def main():
     else:
         files = args.files
 
-    if args.print or not (args.tags or args.delete or args.clear or args.empty):
+    if args.print or not (args.tags or args.delete or args.clear or args.empty or args.split):
         # Printing files.   Compute the tags to print, then print 'em
         printtags = []
         if args.print:
             printtags = list(map(str.upper, flatten(args.print)))
         if args.value:
-            checks = makeRegEx(flatten(args.value))
+            try:
+                checks = makeRegEx(flatten(args.value))
+            except ValueError as e:
+                cprint(e, "yellow")
+                sys.exit(1)
         else:
             checks = None
         for file in files:
@@ -440,15 +496,21 @@ def main():
             removeTags(f, args.preserve, args.dryrun)
     else:
         # Else we're setting tags.
-        tags = makeTagValues(flatten(args.tags))
+        tags   = makeTagValues(flatten(args.tags))
+        splits = flatten(args.split)
+        if (args.split and not splits) or 'ALL' in splits:
+            splits=VALID_TAGS
+
         delete = flatten(args.delete)
+
+
         for file in files:
-            data = processFile(file, tags, delete, args.preserve, args.append, args.empty, args.dryrun, args.save)
+            data = processFile(file, tags, splits, delete, args.preserve, args.append, args.empty, args.splitchars, args.dryrun)
             if args.save and data:
                 saveTags(file, data, args.fullpath, args.relative)
 
         if args.stats:
-            print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']}")
+            print(f"Files Processed: {stats['processed']} Files Changed: {stats['updated']} Tags added: {stats['added']} Tags changed: {stats['changed']} Tags deleted: {stats['deleted']} Tags split: {stats['split']}")
 
     if args.save:
         match args.format:
