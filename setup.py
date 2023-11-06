@@ -2,11 +2,11 @@ from distutils.core import setup
 
 setup(
     name='MusicUtils',
-    version='0.1',
+    version='0.2',
     packages=['MusicUtils'],
     url='',
     license='MIT',
-    author='kolding',
+    author='Eric Koldinger',
     author_email='kolding@washington.edu',
     description='',
     entry_points =
