@@ -291,23 +291,24 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
             cprint(v, 'red')
 
     splitpat = f"[{splitchars}]"
-    for tag in splits:
-        if tag.lower() == 'artwork':
-            continue
-        try:
-            curVals = set(map(str, data[tag].values))
-            newVals = set()
-            for val in curVals:
-                sub = set(map(str.strip, re.split(splitpat, str(val))))
-                newVals = newVals.union(sub)
-            if newVals != curVals:
-                newVals = list(newVals)
-                qprint(f"    Splitting tag {tag} to {newVals}")
-                data[tag.upper()] = list(newVals)
-                updated = True
-                stats['split'] += 1
-        except ValueError as v:
-            cprint(v, 'red')
+    if splits:
+        for tag in splits:
+            if tag.lower() == 'artwork':
+                continue
+            try:
+                curVals = set(map(str, data[tag].values))
+                newVals = set()
+                for val in curVals:
+                    sub = set(map(str.strip, re.split(splitpat, str(val))))
+                    newVals = newVals.union(sub)
+                if newVals != curVals:
+                    newVals = list(newVals)
+                    qprint(f"    Splitting tag {tag} to {newVals}")
+                    data[tag.upper()] = list(newVals)
+                    updated = True
+                    stats['split'] += 1
+            except ValueError as v:
+                cprint(v, 'red')
 
     if delete:
         for tag in delete:
@@ -514,7 +515,7 @@ def main():
         # Else we're setting tags.
         tags   = makeTagValues(flatten(args.tags))
         splits = flatten(args.split)
-        if (args.split and not splits) or 'ALL' in splits:
+        if args.split and (not splits or 'ALL' in splits):
             splits=VALID_TAGS
 
         delete = flatten(args.delete)
