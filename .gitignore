@@ -5,3 +5,5 @@ Bankie_Banx
 .DS_Store
 *.swp
 __pycache__
+acoustid
+build
