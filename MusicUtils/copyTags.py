@@ -29,11 +29,11 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
-import pathlib
 import shutil
 import sys
 import os
 import pprint
+from pathlib import Path
 
 import music_tag
 
@@ -52,7 +52,7 @@ class PrintOnce:
             self.first = False
 
 def backupFile(path):
-    bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
+    bupPath = Path(path.with_suffix(path.suffix + '.bak'))
     print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
 
@@ -78,8 +78,8 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
 
     subDirs = sorted([x.name for x in srcDir.iterdir() if x.is_dir()])
     for i in subDirs:
-        subSrc = pathlib.Path(srcDir, i)
-        subDst = pathlib.Path(dstDir, i)
+        subSrc = Path(srcDir, i)
+        subDst = Path(dstDir, i)
         if subDst.is_dir():
             changes2 = copyTree(subSrc, subDst, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
             changes = addTuples(changes, changes2)
@@ -91,7 +91,7 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
     return changes
 
 
-def copyDir(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
+def copyDir(srcDir: Path, dstDir: Path, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
     srcFiles = list(filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir()))
     dstFiles = list(filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir()))
 
@@ -266,8 +266,8 @@ def parseArgs():
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--recurse", "-R",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Recurse into subdirectories")
     parser.add_argument("--tags", type=str, nargs="+", default=None, help="Tags to copy")
-    parser.add_argument("tagSource", type=pathlib.Path, nargs=1, help="tagSource")
-    parser.add_argument("tagDest", type=pathlib.Path, nargs=1, help="tagDest")
+    parser.add_argument("tagSource", type=Path, nargs=1, help="tagSource")
+    parser.add_argument("tagDest", type=Path, nargs=1, help="tagDest")
     return parser.parse_args()
 
 def main():
@@ -314,8 +314,11 @@ def main():
 
     print("Files Changed: {} Tags Added: {} Tags Replaced: {} Tags Deleted: {} Errors: {}".format(*nChanges))
 
-if __name__ == '__main__':
+def run():
     try:
         main()
     except KeyboardInterrupt:
         sys.exit("Interrupted")
+
+if __name__ == '__main__':
+    run()
