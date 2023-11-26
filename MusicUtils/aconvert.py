@@ -44,7 +44,7 @@ from rich.progress import Progress, TextColumn, SpinnerColumn, BarColumn, TaskPr
 import rich.logging
 import rich.highlighter
 
-Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "params", "logger", "args"])
+Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "resample", "params", "logger", "args"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])
 
 defaults = {
@@ -82,7 +82,7 @@ bitrates = {
 logger = None
 args = None
 
-def initLogging(verbosity):
+def initLogging(verbosity) -> logging.Logger:
     handler = rich.logging.RichHandler(show_time=True, show_path=False, highlighter=rich.highlighter.NullHighlighter())
 
     levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
@@ -117,7 +117,7 @@ def makeJobs(files: list[pathlib.Path], srcdir: pathlib.Path, destdir: pathlib.P
         dest = pathlib.Path(destdir, src.relative_to(srcdir).with_suffix(suffix))
         logger.debug("%s -> %s", src, dest)
         if not dest.exists() or overwrite or (empty and dest.exists() and dest.stat().st_size == 0):
-            jobs.append(Conversion(src, dest, fmt, codec, bitrate, None, logger, args))
+            jobs.append(Conversion(src, dest, fmt, codec, bitrate, args.cd, None, logger, args))
         else:
             logger.debug("Skipping %s.  Target %s exists", src, dest)
     return jobs
@@ -142,12 +142,19 @@ def convert(job):
     logger.debug("Begining Conversion %s -> %s", src, dest)
 
     try:
+
+        params = []
+        if job.resample:
+            params = ['-af', 'aformat=sample_fmts=s16:sample_rates=44100']
+
         if not args.dryrun:
             dest.parent.mkdir(parents=True, exist_ok=True)
             tmp = audio.export(dest,
                                format=job.format,
                                bitrate=job.bitrate,
-                               codec=job.codec)
+                               codec=job.codec,
+                               parameters=params,
+                               )
             tmp.close()
     except Exception as e:
         print(f"Failed writing {dest}: {e}")
@@ -183,13 +190,15 @@ def processArgs():
     parser.add_argument('--output',  '-o', type=str, choices=defaults.keys(), default='aac', help='List of files/directories to reorganize')
     parser.add_argument('--format', '-f', dest='format', default=None,  help="Output Format" + _def)
     parser.add_argument('--bitrate', '-b', dest='bitrate', type=str, default=None, help='Output bitrate' + _def)
-    parser.add_argument('--codec', '-c', dest='codec', type=str, default=None, help='Codec to use')
+    parser.add_argument('--codec', '-c', dest='codec', type=str, default=None, help='Codec to use' + _def)
+    parser.add_argument('--cd', '-C', dest='cd', type=bool, default=False, action=argparse.BooleanOptionalAction, help="Convert to CD resolution" + _def)
     parser.add_argument('--suffix', '-s', dest='suffix', type=str, default=None, help='Suffix to use')
     parser.add_argument('--copytags', '-t', dest='copytags', action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
     parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
     parser.add_argument('--overwrite', '-O', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
     parser.add_argument('--empty', '-E', dest='empty', action=argparse.BooleanOptionalAction, default=False, help='Overwrite empty files' + _def)
-    parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]", help="Number of concurrent jobs to use" + _def)
+    parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]",
+                        help="Number of concurrent jobs to use" + _def)
     parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
     parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help='Increase the verbosity')
