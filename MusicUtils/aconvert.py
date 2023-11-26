@@ -230,7 +230,8 @@ def main():
                           TaskProgressColumn(),
                           MofNCompleteColumn(),
                           TimeRemainingColumn(),
-                          expand=False) as pbar:
+                          expand=False,
+                          transient=True) as pbar:
                 task = pbar.add_task("Converting", total=len(jobs), visible=args.progress)
                 #pbar.start()
                 for src, dest, error in pool.imap_unordered(convert, jobs):
