@@ -139,10 +139,16 @@ def munge(name):
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~\p{P}]', '', name)
     #name = re.sub(r'[^\w\s,]', '', name)
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
+
+    # Remove all punctuation, except -,_
     name = re.sub(r'[^\P{Punct}-,_]', '', name)
+    # Remove all control characters (what the f**k are these doing in a name anyhow?)
     name = re.sub(r'[\p{Cntrl}]', '', name)
+    # Convert all spaces to underscores
     name = re.sub(r'\s', '_', name)
+    # Convert multiple underscores to a single underscore
     name = re.sub(r'_+', '_', name)
+    # Re
     if not args.useArticle:
         name = re.sub(r"^(The|A|An)\s+", "", name)
     name = name.strip('_')
@@ -503,5 +509,11 @@ def main():
             log.warning(f"Caught exception processing {file}: {exc}")
             log.exception(exc)
 
+def run():
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit("Interrupted")
+
 if __name__ == "__main__":
-    main()
+    run()

@@ -394,8 +394,12 @@ def main():
                 cprint("No changes", "cyan")
 
 
-if __name__ == '__main__':
+def run()
     try:
         main()
     except KeyboardInterrupt:
         cprint("Interrupted", "red")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    run()

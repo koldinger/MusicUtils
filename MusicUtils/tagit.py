@@ -544,8 +544,11 @@ def main():
                     writer.writerow(row)
 
 
-if __name__ == '__main__':
+def run():
     try:
         main()
     except KeyboardInterrupt:
         cprint("Interrupted", "red")
+
+if __name__ == '__main__':
+    run()
