@@ -4,6 +4,7 @@ import argparse
 import pathlib
 import magic
 import pprint
+import sys
 
 from functools import cache
 
@@ -91,19 +92,19 @@ def checkConsistency(directory, details):
     data =  loadTags(directory)
 
     if data:
-        for t in album_tags:
-            tagVals, missing = collectAndCheck(t, data)
+        for tag in album_tags:
+            tagVals, missing = collectAndCheck(tag, data)
             if len(tagVals) > 1:
                 #print(tagVals.keys(), fmtTuples(tagVals.keys()))
-                report(f"Inconsistent {t} values: {fmtTuples(tagVals.keys())}")
+                report(f"Inconsistent {tag} values: {fmtTuples(tagVals.keys())}")
                 if details:
                     printDetails(tagVals)
 
             if missing:
                 if len(missing) == len(data):
-                    report(f"Missing tag {t} in all files")
+                    report(f"Missing tag {tag} in all files")
                 else:
-                    report(f"Missing tag {t} in files in {missing}")
+                    report(f"Missing tag {tag} in files in {missing}")
 
         diskdata = splitByDisk(data)
         numdisks = getValues('totaldisks', data)
@@ -119,17 +120,17 @@ def checkConsistency(directory, details):
 
         for disk, dData in diskdata.items():
             for tag in disk_tags:
-                tagVals, missing = collectAndCheck(t, dData)
+                tagVals, missing = collectAndCheck(tag, dData)
                 if len(tagVals) > 1:
                     #report(f"{tagVals.keys()} {fmtTuples(tagVals.keys())}")
-                    report(f"Inconsistent {t} values in {disk}: {list(tagVals.keys())}")
+                    report(f"Inconsistent {tag} values in {disk}: {list(tagVals.keys())}")
                     if details:
                         printDetails(tagVals)
                 if missing:
                     if len(missing) == len(dData):
-                        report(f"Missing tag {t} in all files for disk {disk}")
+                        report(f"Missing tag {tag} in all files for disk {disk}")
                     else:
-                        report(f"Missing tag {t} in files for disk {disk} in {missing}")
+                        report(f"Missing tag {tag} in files for disk {disk} in {missing}")
             totaltracks = getValues('totaltracks', dData)
             if len(totaltracks) > 1:
                 report(f"Unable to check number of disks.  Inconsistent values: {list(totaltracks)}")
@@ -182,11 +183,13 @@ def checkDir(d, details, recurse):
                 checkDir(i, details, True)
 
 def main():
-    args = parse_args()
+    try:
+        args = parse_args()
 
-    for i in args.directories:
-        checkDir(i, args.details, args.recurse)
-
+        for i in args.directories:
+            checkDir(i, args.details, args.recurse)
+    except KeyboardInterrupt:
+        sys.exit("Interupted")
 
 if __name__ == "__main__":
     main()
