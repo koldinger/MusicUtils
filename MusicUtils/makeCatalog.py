@@ -9,6 +9,7 @@ import pprint
 import unicodedata
 import os.path
 import itertools
+import sys
 
 from pymediainfo import MediaInfo
 
@@ -337,7 +338,12 @@ def main():
     printDatabase()
     saveDB()
     
+def run():
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit("Interrupted")
 
 if __name__ == "__main__":
-    main()
+    run()
 
