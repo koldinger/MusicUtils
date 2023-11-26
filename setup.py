@@ -12,10 +12,10 @@ setup(
     entry_points =
         {
             "console_scripts": [
-                "tagit     = MusicUtils.tagit:main",
-                "tagedit   = MusicUtils.tagedit:main",
-                "reorg     = MusicUtils.reorg:main",
-                "copyTags  = MusicUtils.copyTags:main",
+                "tagit     = MusicUtils.tagit:run",
+                "tagedit   = MusicUtils.tagedit:run",
+                "reorg     = MusicUtils.reorg:run",
+                "copyTags  = MusicUtils.copyTags:run",
                 "aconvert  = MusicUtils.aconvert:main",
                 "checkConsistency= MusicUtils.checkConsistency:main",
             ],
