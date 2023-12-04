@@ -2,8 +2,6 @@
 
 import magic
 
-import music_tag
-
 def isAudio(path):
     return magic.from_buffer(open(path, "rb").read(2048), mime=True).startswith('audio/')
 
