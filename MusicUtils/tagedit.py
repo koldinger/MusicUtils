@@ -121,6 +121,7 @@ def listToTuple(x):
 
 COMMON_TAG = 'common'
 TRACK_TAG = 'tracks'
+
 def promoteTags(tags):
     consolidated = {}
     grpTags = {}
@@ -383,18 +384,18 @@ def main():
         if not args.dryrun:
             if changedFiles:
                 if not args.confirm or confirm("Write changes [Y/n]: "):
-                    for i in fileData:
-                        if not i.filename.name in changedFiles:
+                    for file in fileData:
+                        if not file.filename.name in changedFiles:
                             continue
-                        times = i.filename.stat()
-                        i.save()
+                        times = file.filename.stat()
+                        file.save()
                         if args.preserve:
                             os.utime(i.filename, times=(times.st_atime, times.st_mtime))
             else:
                 cprint("No changes", "cyan")
 
 
-def run()
+def run():
     try:
         main()
     except KeyboardInterrupt:

@@ -44,7 +44,6 @@ from hashlib import md5
 
 import magic
 import music_tag
-import yaml
 from PIL import Image
 from termcolor import cprint, colored
 
@@ -519,7 +518,6 @@ def main():
             splits=VALID_TAGS
 
         delete = flatten(args.delete)
-
 
         for file in files:
             data = processFile(file, tags, splits, delete, args.preserve, args.append, args.empty, args.splitchars, args.dryrun)
