@@ -390,7 +390,7 @@ def main():
                         times = file.filename.stat()
                         file.save()
                         if args.preserve:
-                            os.utime(i.filename, times=(times.st_atime, times.st_mtime))
+                            os.utime(file.filename, times=(times.st_atime, times.st_mtime))
             else:
                 cprint("No changes", "cyan")
 
