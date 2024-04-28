@@ -142,7 +142,6 @@ def convert(job):
     logger.debug("Begining Conversion %s -> %s", src, dest)
 
     try:
-
         params = []
         if job.resample:
             params = ['-af', 'aformat=sample_fmts=s16:sample_rates=44100']
@@ -157,7 +156,7 @@ def convert(job):
                                )
             tmp.close()
     except Exception as e:
-        print(f"Failed writing {dest}: {e}")
+        logger.error(f"Failed writing {dest}: {e}")
         return src, dest, f"{src} -> {dest} failed writing: {e}"
 
     if args.copytags:
@@ -228,6 +227,7 @@ def main():
     jobs = makeJobs(audioFiles, srcdir, destdir, suffix, fmt, codec, bitrate, args.overwrite, args.empty)
 
     logger.info("Running %d conversions on %d processes", len(jobs), args.workers)
+    #logger.info(str(jobs))
 
     completed = 0
 
