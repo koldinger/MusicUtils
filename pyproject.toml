@@ -1,4 +1,3 @@
-[]
 [project]
 name =  "MusicUtils"
 description = "Command-line music manipulation utilities"
