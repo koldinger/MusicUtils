@@ -1,0 +1,29 @@
+[]
+[project]
+name =  "MusicUtils"
+description = "Command-line music manipulation utilities"
+version = "0.2"
+requires-python = ">= 3.10"
+authors = [
+  { name = "Eric Koldinger", email="kolding@washington.edu" }
+]
+readme = "README.md"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "License :: OSI Approved :: BSD License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Sound/Audio",
+  "Topic :: Multimedia :: Sound/Audio :: Conversion",
+]
+
+[project.scripts]
+tagit             = "MusicUtils.tagit:run"
+tagedit           = "MusicUtils.tagedit:run"
+reorg             = "MusicUtils.reorg:run"
+copyTags          = "MusicUtils.copyTags:run"
+aconvert          = "MusicUtils.aconvert:main"
+checkConsistency  = "MusicUtils.checkConsistency:main"
+
+[project.urls]
+Repository        = "https://github.com/koldinger/MusicUtils"
