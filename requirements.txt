@@ -12,3 +12,4 @@ regex==2023.10.3
 rich==13.6.0
 termcolor==2.3.0
 Unidecode==1.3.7
+music_tag @ https://github.com/koldinger/music-tag/archive/refs/tags/1.0.0.zip

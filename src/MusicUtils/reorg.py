@@ -38,6 +38,7 @@ import unicodedata
 import shutil
 from collections import Counter, defaultdict
 from functools import reduce
+from enum import Enum
 
 import regex as re
 
@@ -49,10 +50,11 @@ import magic
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
 
-ACTION_LINK=1
-ACTION_MOVE=2
-ACTION_COPY=3
-ACTION_SYMLINK=4
+class Action(Enum):
+    ACTION_LINK=1
+    ACTION_MOVE=2
+    ACTION_COPY=3
+    ACTION_SYMLINK=4
 
 bases_default = os.environ.get('REORG_TYPES', '').split()
 base_default = os.environ.get('REORG_BASE', '.')
@@ -74,13 +76,13 @@ def processArgs():
                         help='Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3')
 
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--move', dest='action', action='store_const', default=ACTION_MOVE, const=ACTION_MOVE,
+    action.add_argument('--move', dest='action', action='store_const', default=Action.ACTION_MOVE, const=Action.ACTION_MOVE,
                         help='Move (rename) the files')
-    action.add_argument('--link', dest='action', action='store_const', const=ACTION_LINK,
+    action.add_argument('--link', dest='action', action='store_const', const=Action.ACTION_LINK,
                         help='Hard link the files')
-    action.add_argument('--copy', dest='action', action='store_const', const=ACTION_COPY,
+    action.add_argument('--copy', dest='action', action='store_const', const=Action.ACTION_COPY,
                         help='Copy the files')
-    action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=ACTION_SYMLINK,
+    action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=Action.ACTION_SYMLINK,
                         help='Symbolic link the files')
 
     parser.add_argument('--force', '-f', default=False, dest='force', action=argparse.BooleanOptionalAction,
@@ -298,15 +300,15 @@ def doMove(src, dest):
             raise NotADirectoryError("{dest.parent} exists, and is not a directory")
 
         match args.action:
-            case ACTION_LINK:
+            case Action.ACTION_LINK:
                 dest.unlink(missing_ok=True)
                 dest.hardlink_to(src)
-            case ACTION_SYMLINK:
+            case Action.ACTION_SYMLINK:
                 dest.unlink(missing_ok=True)
                 dest.symlink_to(src)
-            case ACTION_MOVE:
+            case Action.ACTION_MOVE:
                 src.rename(dest)
-            case ACTION_COPY:
+            case Action.ACTION_COPY:
                 shutil.copy2(src, dest)
             case _:
                 raise ValueError(f"Unknown action: {args.action}")
@@ -314,13 +316,13 @@ def doMove(src, dest):
 
 def actionName():
     match args.action:
-        case ACTION_LINK:
+        case Action.ACTION_LINK:
             name = "Linking"
-        case ACTION_MOVE:
+        case Action.ACTION_MOVE:
             name = "Moving"
-        case ACTION_COPY:
+        case Action.ACTION_COPY:
             name = "Copying"
-        case ACTION_SYMLINK:
+        case Action.ACTION_SYMLINK:
             name = "SymLinking"
         case _:
             name = "Unknowwn"
