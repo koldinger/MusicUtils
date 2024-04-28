@@ -83,6 +83,9 @@ def processArgs():
     action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=ACTION_SYMLINK,
                         help='Symbolic link the files')
 
+    parser.add_argument('--force', '-f', default=False, dest='force', action=argparse.BooleanOptionalAction,
+                        help='Overwrite any existing file')
+
     parser.add_argument('--recurse', default=True, dest='recurse', action=argparse.BooleanOptionalAction, 
                         help='Recurse into directories' + _def)
     parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,
@@ -294,27 +297,33 @@ def doMove(src, dest):
             #log.warning(f"{dest.parent} exists, and is not a directory")
             raise NotADirectoryError("{dest.parent} exists, and is not a directory")
 
-        if args.action == ACTION_LINK:
-            dest.hardlink_to(src)
-        elif args.action == ACTION_SYMLINK:
-            dest.symlink_to(src)
-        elif args.action == ACTION_MOVE:
-            src.rename(dest)
-        elif args.action == ACTION_COPY:
-            shutil.copy2(src, dest)
-        else:
-            raise ValueError(f"Unknown action: {args.action}")
+        match args.action:
+            case ACTION_LINK:
+                dest.unlink(missing_ok=True)
+                dest.hardlink_to(src)
+            case ACTION_SYMLINK:
+                dest.unlink(missing_ok=True)
+                dest.symlink_to(src)
+            case ACTION_MOVE:
+                src.rename(dest)
+            case ACTION_COPY:
+                shutil.copy2(src, dest)
+            case _:
+                raise ValueError(f"Unknown action: {args.action}")
 
 
 def actionName():
-    if args.action == ACTION_LINK:
-        name = "Linking"
-    elif args.action == ACTION_MOVE:
-        name = "Moving"
-    elif args.action == ACTION_COPY:
-        name = "Copying"
-    elif args.action == ACTION_SYMLINK:
-        name = "SymLinking"
+    match args.action:
+        case ACTION_LINK:
+            name = "Linking"
+        case ACTION_MOVE:
+            name = "Moving"
+        case ACTION_COPY:
+            name = "Copying"
+        case ACTION_SYMLINK:
+            name = "SymLinking"
+        case _:
+            name = "Unknowwn"
     if args.test:
         name = "[-] " + name
     return name
@@ -336,8 +345,11 @@ def renameFile(file, tags, dragfiles=None, dirname=None, length=0):
 
         if dest.exists():
             if not file.samefile(dest):
-                log.warning(f"{dest} exists, skipping ({file})")
-                return dest
+                if not args.force:
+                    log.warning(f"{dest} exists, skipping ({file})")
+                    return dest
+                else:
+                    log.warning(f"Overwriting existing file {dest} with {file}")
 
         if args.ignorecase and file.name.lower() == dest.name.lower():
             log.debug(f"Not moving {file.name} to {dest.name}.   Change is only in case")
