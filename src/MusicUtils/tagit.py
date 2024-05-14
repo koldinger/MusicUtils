@@ -37,6 +37,11 @@ import re
 import json
 import csv
 import sys
+import urllib.parse
+import traceback
+import io
+
+import requests
 
 from functools import lru_cache, partial
 from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter, FileType
@@ -171,14 +176,20 @@ def flatten(l):
     return l
 
 @lru_cache(maxsize=64)
-def readfile(name):
+def readfile(url):
     """
     Read a file, and cache the results.   For artwork, so we don't have to read the art files multiple times
     :param name: The filename to read
     :return: The bytes in the file
     """
-    with open(name, "rb") as f:
-        return f.read()
+    info = urllib.parse.urlparse(url)
+    if info.scheme in ['', 'file']:
+        with open(info.path, "rb") as f:
+            return f.read()
+    if info.scheme in ['http', 'https']:
+        response = requests.get(url)
+        response.raise_for_status()
+        return response.content
 
 @lru_cache(maxsize=64)
 def imageInfo(name):
@@ -187,7 +198,7 @@ def imageInfo(name):
     """
     data = readfile(name)
     mime = magic.from_buffer(data, mime=True)
-    image = Image.open(name)
+    image = Image.open(io.BytesIO(data))
     size = image.size
     hash = md5(data).hexdigest()
     info = f"{name} - {mime} {size[0]}x{size[1]} {hash}"
@@ -285,7 +296,8 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
         except KeyError as k:
             cprint(f'Invalid tag name {k}', 'red')
         except FileNotFoundError as e:
-            cprint(f'Could not read artwork file {e.filename}')
+            cprint(f'Could not read artwork file {e.filename} {e}', 'red')
+            #traceback.print_exc()
         except ValueError as v:
             cprint(v, 'red')
 
