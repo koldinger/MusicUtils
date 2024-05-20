@@ -38,8 +38,8 @@ import json
 import csv
 import sys
 import urllib.parse
-import traceback
 import io
+#import traceback
 
 import requests
 
@@ -118,7 +118,8 @@ def checkTagAll(tag):
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"+\
              "Valid tags are: \n" +\
-             f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}"
+             f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}" +\
+             "\n\nArtwork tags take either a file path or a URL"
 
     parser = ArgumentParser(description="Set or print tags in an audio file",
                             epilog=epilog,
@@ -140,7 +141,8 @@ def parseArgs():
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
     printGroup.add_argument('--names', '-N',    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
-
+    printGroup.add_argument("--extract", "-E",  type=int, nargs='?', default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
+    printGroup.add_argument("--output", "-O",   type=FileType('wb'), default=sys.stdout.buffer, nargs=1, help="Output file for artwork.   Default is stdout")
 
     andOr = printGroup.add_mutually_exclusive_group()
     andOr.add_argument("--and", dest='andOp', action='store_true',  default='True', help="Only print if all values match ")
@@ -294,12 +296,12 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
             stats[action] += 1
             updated = True
         except KeyError as k:
-            cprint(f'Invalid tag name {k}', 'red')
+            cprint(f'Invalid tag name {k}', 'red', file=sys.stderr)
         except FileNotFoundError as e:
-            cprint(f'Could not read artwork file {e.filename} {e}', 'red')
+            cprint(f'Could not read artwork file {e.filename} {e}', 'red', file=sys.stderr)
             #traceback.print_exc()
         except ValueError as v:
-            cprint(v, 'red')
+            cprint(v, 'red', file=sys.stderr)
 
     splitpat = f"[{splitchars}]"
     if splits:
@@ -319,7 +321,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
                     updated = True
                     stats['split'] += 1
             except ValueError as v:
-                cprint(v, 'red')
+                cprint(v, 'red', file=sys.stderr)
 
     if delete:
         for tag in delete:
@@ -393,7 +395,7 @@ def printTags(file, tags, empty, details, names, printList, save):
         print(file)
         return
 
-    cprint(f"File: {file}", "green")
+    cprint(f"File: {file}", "green", file=sys.stderr)
     data =  loadTags(file)
 
     for tag in map(str.upper, sorted(data.tags(), key=tagKey)):
@@ -409,7 +411,7 @@ def printTags(file, tags, empty, details, names, printList, save):
                     for i in data[tag].values:
                         print(f"{tag:27}: {i}")
         except Exception as e:
-            cprint(f"Caught exception processing tag {tag}: {e}", 'red')
+            cprint(f"Caught exception processing tag {tag}: {e}", 'red', file=sys.stderr)
     return data
 
 savedData={}
@@ -464,11 +466,11 @@ def makeRegEx(values):
             regex = re.compile(value)
             checks.append((x.tag, regex))
         except re.error as e:
-            cprint(f"Invaid expression {value}: {e}", "red")
+            cprint(f"Invaid expression {value}: {e}", "red", file=sys.stderr)
             errors = True
 
     if errors:
-        raise ValueError(f"Invalid value expression: {values}")
+        raise ValueError(f"Invalid value expression: {values}", file=sys.stderr)
     return checks
 
 def checkTagRegEx(data, tag, regex):
@@ -500,28 +502,42 @@ def main():
     else:
         files = args.files
 
-    if args.print or not (args.tags or args.delete or args.clear or args.empty or args.split):
+    if args.print and not (args.tags or args.delete or args.clear or args.empty or args.split or args.extract):
         # Printing files.   Compute the tags to print, then print 'em
-        printtags = []
         if args.print:
-            printtags = list(map(str.upper, flatten(args.print)))
-        if args.value:
-            try:
-                checks = makeRegEx(flatten(args.value))
-            except ValueError as e:
-                cprint(e, "yellow")
-                sys.exit(1)
-        else:
-            checks = None
-        for file in files:
-            if not checks or checkTagsRegEx(file, checks, args.andOp):
-                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
-                if args.save and data:
-                    saveTags(file, data, args.fullpath, args.relative)
+            printtags = []
+            if args.print:
+                printtags = list(map(str.upper, flatten(args.print)))
+            if args.value:
+                try:
+                    checks = makeRegEx(flatten(args.value))
+                except ValueError as e:
+                    cprint(e, "yellow", file=sys.stderr)
+                    sys.exit(1)
+            else:
+                checks = None
+            for file in files:
+                if not checks or checkTagsRegEx(file, checks, args.andOp):
+                    data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
+                    if args.save and data:
+                        saveTags(file, data, args.fullpath, args.relative)
+    elif args.extract:
+        if len(files) != 1:
+            cprint("Only one file allowed with extract", "red", file=sys.stderr)
+            sys.exit(1)
+        data = loadTags(files[0])
+        if args.extract < 1 or args.extract > len(data['ARTWORK']):
+            cprint(f"Invalid image number {args.extract}.   File contains {len(data['ARTWORK'])} images", "red", file=sys.stderr)
+            sys.exit(1)
+        art = data['artwork'].values[args.extract - 1]
+        args.output.write(art.data)
+
+        
     elif args.clear:
         # clear all the tags.
         for f in files:
             removeTags(f, args.preserve, args.dryrun)
+
     else:
         # Else we're setting tags.
         tags   = makeTagValues(flatten(args.tags))
