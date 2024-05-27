@@ -52,7 +52,7 @@ import music_tag
 from PIL import Image
 from termcolor import cprint, colored
 
-from MusicUtils.Utils import isAudio
+from .Utils import isAudio
 
 # Extract the list of valid tags from the music_tag module.
 ALL_TAGS = sorted(music_tag.tags())
@@ -141,8 +141,10 @@ def parseArgs():
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
     printGroup.add_argument('--names', '-N',    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
-    printGroup.add_argument("--extract", "-E",  type=int, nargs='?', default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
-    printGroup.add_argument("--output", "-O",   type=FileType('wb'), default=sys.stdout.buffer, nargs=1, help="Output file for artwork.   Default is stdout")
+
+    artGroup = parser.add_argument_group("Artwork Extraction Options")
+    artGroup.add_argument("--extract", "-E",  type=int, nargs='?', default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
+    artGroup.add_argument("--output", "-O",   type=FileType('wb'), default=sys.stdout.buffer, help="Output file for artwork.   Default is stdout")
 
     andOr = printGroup.add_mutually_exclusive_group()
     andOr.add_argument("--and", dest='andOp', action='store_true',  default='True', help="Only print if all values match ")
@@ -258,7 +260,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
     for tag in tags:
         try:
             if tag.lower() == 'artwork':
-                values = map(readfile, tags[tag])
+                values = list(map(music_tag.file.Artwork, map(readfile, tags[tag])))
             else:
                 values = tags[tag]
 
@@ -502,25 +504,27 @@ def main():
     else:
         files = args.files
 
-    if args.print and not (args.tags or args.delete or args.clear or args.empty or args.split or args.extract):
+    printit = args.print or not (args.tags or args.delete or args.clear or args.split or args.extract)
+
+    if args.print or not (args.tags or args.delete or args.clear or args.empty or args.split or args.extract):
         # Printing files.   Compute the tags to print, then print 'em
+        printtags = []
         if args.print:
-            printtags = []
-            if args.print:
-                printtags = list(map(str.upper, flatten(args.print)))
-            if args.value:
-                try:
-                    checks = makeRegEx(flatten(args.value))
-                except ValueError as e:
-                    cprint(e, "yellow", file=sys.stderr)
-                    sys.exit(1)
-            else:
-                checks = None
-            for file in files:
-                if not checks or checkTagsRegEx(file, checks, args.andOp):
-                    data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
-                    if args.save and data:
-                        saveTags(file, data, args.fullpath, args.relative)
+            printtags = list(map(str.upper, flatten(args.print)))
+
+        if args.value:
+            try:
+                checks = makeRegEx(flatten(args.value))
+            except ValueError as e:
+                cprint(e, "yellow", file=sys.stderr)
+                sys.exit(1)
+        else:
+            checks = None
+        for file in files:
+            if not checks or checkTagsRegEx(file, checks, args.andOp):
+                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
+                if args.save and data:
+                    saveTags(file, data, args.fullpath, args.relative)
     elif args.extract:
         if len(files) != 1:
             cprint("Only one file allowed with extract", "red", file=sys.stderr)
