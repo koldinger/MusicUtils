@@ -53,7 +53,9 @@ defaults = {
     "ogg":  DefParams("libvorbis", "ogg", None, ".ogg", None),
     "opus": DefParams("libopus", "opus", None, ".opus", None),
     "alac": DefParams("alac", "ipod", None, ".alac", None),
-    "flac": DefParams("flac", "flac", None, ".flac", None)
+    "flac": DefParams("flac", "flac", None, ".flac", None),
+    "aiff": DefParams("pcm_s16be", "aiff", None, ".aiff", None),
+    "wav":  DefParams("pcm_s16le", "wav", None, ".wav", None)
 }
 
 formats = {
@@ -69,7 +71,9 @@ inputtypes = {
             ".mp3" : "mp3",
             ".ogg" : "ogg",
             ".alac": "alac",
-            ".ape": "ape"
+            ".ape": "ape",
+            ".aiff": "aiff",
+            ".wav": "wav"
             }
 
 bitrates = {
