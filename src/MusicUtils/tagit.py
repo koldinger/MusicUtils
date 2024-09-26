@@ -29,28 +29,27 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-import pathlib
-import shutil
-import os
-import textwrap
-import re
-import json
 import csv
-import sys
-import urllib.parse
 import io
-#import traceback
-
-import requests
-
+import json
+import os
+import pathlib
+import re
+import shutil
+import sys
+import textwrap
+import urllib.parse
+from argparse import (SUPPRESS, ArgumentParser, ArgumentTypeError,
+                      BooleanOptionalAction, FileType,
+                      RawDescriptionHelpFormatter)
 from functools import lru_cache, partial
-from argparse import ArgumentParser, BooleanOptionalAction, ArgumentTypeError, SUPPRESS, RawDescriptionHelpFormatter, FileType
 from hashlib import md5
 
 import magic
 import music_tag
+import requests
 from PIL import Image
-from termcolor import cprint, colored
+from termcolor import colored, cprint
 
 from .Utils import isAudio
 
@@ -140,7 +139,10 @@ def parseArgs():
     printGroup.add_argument("--all", "-A",      type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
+    printGroup.add_argument('--ignorecase', '-I', type=bool, action=BooleanOptionalAction, default=False, help="Ignore case on comparisons")
     printGroup.add_argument('--names', '-N',    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
+    printGroup.add_argument("--filename",       type=bool, action=BooleanOptionalAction, default=True, help="Print filename")
+    printGroup.add_argument("--tagname",        type=bool, action=BooleanOptionalAction, default=True, help="Print tag name")
 
     artGroup = parser.add_argument_group("Artwork Extraction Options")
     artGroup.add_argument("--extract", "-E",  type=int, nargs='?', default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
@@ -240,7 +242,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
 
     Parameters:
        file: A Path object pointing to the file in question.
-       tags: A list of TagArguments for tags to 
+       tags: A list of TagArguments for tags to set
        delete: A list of tags to delete
        preserve: Boolean, preserve the timestamps
        append: Boolean, append new values to current list.  If false, current values will be kept
@@ -377,7 +379,7 @@ def tagKey(key):
     return orderedTags.get(key.lower(), '99') + key
 
 
-def printTags(file, tags, empty, details, names, printList, save):
+def printTags(file, tags, empty, details, names, printList, save, filenames=True, tagnames=True):
     """
     Print tags from a file.
 
@@ -386,7 +388,7 @@ def printTags(file, tags, empty, details, names, printList, save):
     tags (list[str]):   list of tags to print
     empty   (bool):     print all the tags, even those with empty/no value
     details (bool):     include those that start with a # sign
-    names   (bool):     Only printh the name of the file
+    names   (bool):     Only print the name of the file
     printList(bool):    Print all elements of a list together
     save    (bool):     Save the tags for later processing
     """
@@ -397,8 +399,8 @@ def printTags(file, tags, empty, details, names, printList, save):
         print(file)
         return
 
-    cprint(f"File: {file}", "green", file=sys.stderr)
     data =  loadTags(file)
+    printFile = filenames
 
     for tag in map(str.upper, sorted(data.tags(), key=tagKey)):
         try:
@@ -407,11 +409,18 @@ def printTags(file, tags, empty, details, names, printList, save):
             if tag.startswith('#') and not details:
                 continue
             if data[tag] or empty:
+                if printFile:
+                    cprint(f"File: {file}", "green")
+                    printFile = False
+                if tagnames:
+                    t = f"{tag:27}: "
+                else:
+                    t = ""
                 if printList:
-                    print(f"{tag:27}: {data[tag]}")
+                    print(f"{t}{data[tag]}")
                 else:
                     for i in data[tag].values:
-                        print(f"{tag:27}: {i}")
+                        print(f"{t}{i}")
         except Exception as e:
             cprint(f"Caught exception processing tag {tag}: {e}", 'red', file=sys.stderr)
     return data
@@ -457,15 +466,19 @@ def qprint(*args):
     if not beQuiet:
         print(*args)
 
-def makeRegEx(values):
+def makeRegEx(values, ignorecase=False):
     errors = False
     checks = []
+    flags = 0
+    if ignorecase:
+        flags |= re.IGNORECASE
+
     for x in values:
         value = x.value
         if value is None:
             value=".*"
         try:
-            regex = re.compile(value)
+            regex = re.compile(value, flags)
             checks.append((x.tag, regex))
         except re.error as e:
             cprint(f"Invaid expression {value}: {e}", "red", file=sys.stderr)
@@ -514,15 +527,16 @@ def main():
 
         if args.value:
             try:
-                checks = makeRegEx(flatten(args.value))
+                checks = makeRegEx(flatten(args.value), args.ignorecase)
             except ValueError as e:
                 cprint(e, "yellow", file=sys.stderr)
                 sys.exit(1)
         else:
             checks = None
+
         for file in files:
             if not checks or checkTagsRegEx(file, checks, args.andOp):
-                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save)
+                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save, args.filename, args.tagname)
                 if args.save and data:
                     saveTags(file, data, args.fullpath, args.relative)
     elif args.extract:
