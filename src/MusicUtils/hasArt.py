@@ -1,8 +1,9 @@
 #! /usr/bin/env python
 
-import sys
-from pymediainfo import MediaInfo
 import pprint
+import sys
+
+from pymediainfo import MediaInfo
 
 sys.argv.pop(0)
 

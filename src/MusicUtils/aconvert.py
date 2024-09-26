@@ -28,21 +28,22 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import pathlib
 import argparse
 import logging
 import os
+import pathlib
 import time
-from multiprocessing import Pool
 from collections import namedtuple
+from multiprocessing import Pool
 
 import colorlog
 import music_tag
-from pydub import AudioSegment
-
-from rich.progress import Progress, TextColumn, SpinnerColumn, BarColumn, TaskProgressColumn, MofNCompleteColumn, TimeRemainingColumn
-import rich.logging
 import rich.highlighter
+import rich.logging
+from pydub import AudioSegment
+from rich.progress import (BarColumn, MofNCompleteColumn, Progress,
+                           SpinnerColumn, TaskProgressColumn, TextColumn,
+                           TimeRemainingColumn)
 
 Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "resample", "params", "logger", "args"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])

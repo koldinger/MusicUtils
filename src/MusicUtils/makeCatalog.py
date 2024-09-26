@@ -1,17 +1,18 @@
 #! /usr/bin/env python
 
 import argparse
-import logging
-import json
 import csv
+import itertools
+import json
+import logging
+import os.path
 import pathlib
 import pprint
-import unicodedata
-import os.path
-import itertools
 import sys
+import unicodedata
 
 from pymediainfo import MediaInfo
+
 
 class NotAudioException(Exception):
     pass

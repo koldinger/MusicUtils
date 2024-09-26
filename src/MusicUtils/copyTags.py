@@ -29,17 +29,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
-import shutil
-import sys
 import os
 import pprint
+import shutil
+import sys
 from pathlib import Path
 
 import music_tag
-
 from termcolor import colored
 
 from MusicUtils.Utils import isAudio
+
 
 class PrintOnce:
     def __init__(self, message):

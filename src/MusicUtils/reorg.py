@@ -30,22 +30,22 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import logging
 import os
 import os.path
-import logging
 import pathlib
-import unicodedata
 import shutil
+import unicodedata
 from collections import Counter, defaultdict
-from functools import reduce
 from enum import Enum
-
-import regex as re
+from functools import reduce
 
 import colorlog
-import unidecode
-import music_tag
 import magic
+import music_tag
+import regex as re
+import unidecode
+
 
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
