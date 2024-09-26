@@ -2,13 +2,16 @@
 
 import argparse
 import pathlib
-import magic
 import pprint
 import sys
-
 from functools import cache
 
+import magic
 import music_tag
+
+import collections
+
+all_values = collections.defaultdict(set)
 
 def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
@@ -50,6 +53,22 @@ def collectAndCheck(tag, data):
             missing.append(file)
     return values, missing
 
+
+core_tags = ['genre']
+core_values = {
+    'genre': {'rock', 'jazz', 'classical', 'blues', 'reggae'}
+}
+
+collect_tags = ['genre']
+
+def checkCoreValues(tag_values, core_values: set[str]):
+    missing_core = []
+    for value, tracks in tag_values.items():
+        if not core_values.intersection(map(str.lower, value)):
+            missing_core += tracks
+
+    return(missing_core)
+
 def getValues(tag, data):
     values = set()
     for file in data:
@@ -76,9 +95,9 @@ def printDetails(details):
         names[v] = fmtTuple(v) + ": "
     maxLen = max(map(len, (names.values())))
 
-    for v in details.keys():
-        lines = pprint.pformat(details[v], compact=True, width=120).splitlines()
-        report(f"    {names[v]:{maxLen}} {lines[0]}")
+    for k, v in details.items():
+        lines = pprint.pformat(sorted(v), compact=True, width=120).splitlines()
+        report(f"    {names[k]:{maxLen}} {lines[0]}")
         for l in lines[1:]:
             print(" " * (maxLen + 4), l)
 
@@ -90,6 +109,7 @@ def checkConsistency(directory, details):
         return
 
     data =  loadTags(directory)
+    missing_core = dict()
 
     if data:
         for tag in album_tags:
@@ -105,6 +125,16 @@ def checkConsistency(directory, details):
                     report(f"Missing tag {tag} in all files")
                 else:
                     report(f"Missing tag {tag} in files in {missing}")
+
+            if tag in core_tags:
+                missing = checkCoreValues(tagVals, core_values[tag])
+                if missing:
+                    missing_core[(tag,)] = missing
+
+            if tag in collect_tags:
+                x = all_values[(tag,)]
+                for i in tagVals:
+                    x |= set(i)
 
         diskdata = splitByDisk(data)
         numdisks = getValues('totaldisks', data)
@@ -142,6 +172,12 @@ def checkConsistency(directory, details):
                     alltracks = set(range(1, num + 1))
                     report(f"Missing tracks: {alltracks - tracks}")
 
+        if missing_core:
+            report("Tracks missing core values")
+            printDetails(missing_core)
+            #for tag, tracks in missing_core.items():
+            #report(f"Tracks missing core {tag}: {sorted(tracks)}")
+
 _first = True
 _dir = None
 def setDir(d):
@@ -153,14 +189,15 @@ def report(string):
     global _first
     if _first:
         print("-" * 40)
-        print(_dir)
+        if _dir:
+            print(_dir)
         _first = False
     print(string)
 
 @cache
 def fmtTuple(x):
     if len(x) == 1:
-        return x[0]
+        return str(x[0])
     #return "(" + ", ".join(str(x)) + ")"
     return "(" + ", ".join(x) + ")"
 
@@ -188,6 +225,12 @@ def main():
 
         for i in args.directories:
             checkDir(i, args.details, args.recurse)
+
+        setDir('')
+        print("-" * 40)
+        print("Summary values")
+        printDetails(all_values)
+
     except KeyboardInterrupt:
         sys.exit("Interupted")
 
