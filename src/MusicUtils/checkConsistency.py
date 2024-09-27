@@ -11,7 +11,7 @@ import music_tag
 
 import collections
 
-all_values = collections.defaultdict(set)
+tag_counts = collections.defaultdict(collections.Counter)
 
 def isAudio(path):
     return magic.from_file(str(path), mime=True).startswith('audio/')
@@ -59,7 +59,7 @@ core_values = {
     'genre': {'rock', 'jazz', 'classical', 'blues', 'reggae'}
 }
 
-collect_tags = ['genre']
+collect_tags = ['genre', 'media']
 
 def checkCoreValues(tag_values, core_values: set[str]):
     missing_core = []
@@ -89,6 +89,9 @@ def splitByDisk(data):
 
     return disks
 
+def maxKey(details):
+    return max(map(len, details.keys()))
+
 def printDetails(details):
     names = {}
     for v in details.keys():
@@ -100,6 +103,36 @@ def printDetails(details):
         report(f"    {names[k]:{maxLen}} {lines[0]}")
         for l in lines[1:]:
             print(" " * (maxLen + 4), l)
+
+def countline(data, width, header, maxwidth = 120):
+    line = header
+    ret = []
+
+    for i, j in data.items():
+        field = f"{i:{width}}: {j:-5}"
+        line += "  " + field
+        if len(line) > maxwidth:
+            ret.append(line)
+            line = header
+
+    if line != header:
+        ret.append(line)
+    return ret
+
+def printCounts(details: dict[str,collections.Counter]):
+    names = {}
+    for v in details.keys():
+        names[v] = fmtTuple(v) + ": "
+    maxLen = max(map(len, (names.values())))
+
+    for k, v in details.items():
+        fwidth = maxKey(v)
+        lines = countline(v, fwidth, "\t", 120)
+        report(f"    {names[k]:{maxLen}}")
+        for line in lines:
+            print(line)
+
+
 
 album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork', 'media' ]
 disk_tags =  ['disknumber', 'totaltracks']
@@ -132,9 +165,11 @@ def checkConsistency(directory, details):
                     missing_core[(tag,)] = missing
 
             if tag in collect_tags:
-                x = all_values[(tag,)]
-                for i in tagVals:
-                    x |= set(i)
+                counter = tag_counts[(tag,)]
+                for key, value in tagVals.items():
+                    """ Key is a tuple, so take each subkey"""
+                    for subkey in key:
+                        counter[subkey] += len(value)
 
         diskdata = splitByDisk(data)
         numdisks = getValues('totaldisks', data)
@@ -227,9 +262,12 @@ def main():
             checkDir(i, args.details, args.recurse)
 
         setDir('')
-        print("-" * 40)
+
+        print('')
+        print('-' * 60)
         print("Summary values")
-        printDetails(all_values)
+        print('-' * 60)
+        printCounts(tag_counts)
 
     except KeyboardInterrupt:
         sys.exit("Interupted")
