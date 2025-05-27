@@ -1,15 +1,14 @@
 #! /usr/bin/env python3
 
 import argparse
-import pathlib
+import collections
 import pprint
 import sys
 from functools import cache
+from pathlib import Path
 
 import magic
 import music_tag
-
-import collections
 
 tag_counts = collections.defaultdict(collections.Counter)
 
@@ -20,18 +19,19 @@ def parse_args():
     p = argparse.ArgumentParser("Check music files for consistent tagging")
     p.add_argument('--recurse', '-R', dest='recurse', default=False, action=argparse.BooleanOptionalAction, help='Recurse through the tree')
     p.add_argument('--details', '-d', dest='details', default=False, action=argparse.BooleanOptionalAction, help='Print full details of inconsistencies')
-    p.add_argument('directories', type=pathlib.Path, nargs='+', help="Directories to check")
+    p.add_argument('directories', type=Path, nargs='+', help="Directories to check")
 
     args = p.parse_args()
-    return(args)
+    return args
 
 def loadTags(d):
     #print(f"Loading tags for dir {d}")
     data = {}
 
-    files = d.iterdir()
+    files = filter(Path.is_file, d.iterdir())
+
     for f in files:
-        if f.is_file() and isAudio(f):
+        if isAudio(f):
             data[f.name] = music_tag.load_file(f.resolve())
 
     return data
@@ -61,13 +61,13 @@ core_values = {
 
 collect_tags = ['genre', 'media']
 
-def checkCoreValues(tag_values, core_values: set[str]):
+def checkCoreValues(tag_values, coreVals: set[str]):
     missing_core = []
     for value, tracks in tag_values.items():
-        if not core_values.intersection(map(str.lower, value)):
+        if not coreVals.intersection(map(str.lower, value)):
             missing_core += tracks
 
-    return(missing_core)
+    return missing_core
 
 def getValues(tag, data):
     values = set()
@@ -142,7 +142,7 @@ def checkConsistency(directory, details):
         return
 
     data =  loadTags(directory)
-    missing_core = dict()
+    missing_core = {}
 
     if data:
         for tag in album_tags:
@@ -157,7 +157,7 @@ def checkConsistency(directory, details):
                 if len(missing) == len(data):
                     report(f"Missing tag {tag} in all files")
                 else:
-                    report(f"Missing tag {tag} in files in {missing}")
+                    report(f"Missing tag {tag} in files in {pprint.pformat(sorted(missing), compact=True)}")
 
             if tag in core_tags:
                 missing = checkCoreValues(tagVals, core_values[tag])
@@ -167,7 +167,7 @@ def checkConsistency(directory, details):
             if tag in collect_tags:
                 counter = tag_counts[(tag,)]
                 for key, value in tagVals.items():
-                    """ Key is a tuple, so take each subkey"""
+                    # Key is a tuple, so take each subkey
                     for subkey in key:
                         counter[subkey] += len(value)
 
@@ -250,9 +250,8 @@ def checkDir(d, details, recurse):
     setDir(d)
     checkConsistency(d, details)
     if recurse:
-        for i in sorted(d.iterdir()):
-            if i.is_dir():
-                checkDir(i, details, True)
+        for i in sorted(filter(Path.is_dir, d.iterdir())):
+            checkDir(i, details, True)
 
 def main():
     try:
