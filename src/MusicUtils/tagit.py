@@ -48,6 +48,7 @@ from hashlib import md5
 import magic
 import music_tag
 import requests
+import yaml
 from PIL import Image
 from termcolor import colored, cprint
 
@@ -193,9 +194,10 @@ def readfile(url):
         with open(info.path, "rb") as f:
             return f.read()
     if info.scheme in ['http', 'https']:
-        response = requests.get(url)
+        response = requests.get(url, timeout=60)
         response.raise_for_status()
         return response.content
+    return bytes(0)
 
 @lru_cache(maxsize=64)
 def imageInfo(name):
@@ -206,8 +208,8 @@ def imageInfo(name):
     mime = magic.from_buffer(data, mime=True)
     image = Image.open(io.BytesIO(data))
     size = image.size
-    hash = md5(data).hexdigest()
-    info = f"{name} - {mime} {size[0]}x{size[1]} {hash}"
+    hashId = md5(data).hexdigest()
+    info = f"{name} - {mime} {size[0]}x{size[1]} {hashId}"
     return info
 
 @lru_cache(maxsize=64)
@@ -251,7 +253,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
        dryrun: Boolean, if true, don't write output, only process and test.
     """
     if not checkFile(file):
-        return
+        return None
 
     qprint(colored(f"Processing file {file}", "green"))
     data = loadTags(file)
@@ -379,7 +381,7 @@ def tagKey(key):
     return orderedTags.get(key.lower(), '99') + key
 
 
-def printTags(file, tags, empty, details, names, printList, save, filenames=True, tagnames=True):
+def printTags(file, tags, empty, details, names, printList, filenames=True, tagnames=True):
     """
     Print tags from a file.
 
@@ -393,11 +395,11 @@ def printTags(file, tags, empty, details, names, printList, save, filenames=True
     save    (bool):     Save the tags for later processing
     """
     if not checkFile(file):
-        return
+        return None
 
     if names:
         print(file)
-        return
+        return None
 
     data =  loadTags(file)
     printFile = filenames
@@ -499,10 +501,11 @@ def checkTagsRegEx(file, checks, andOp=True):
     if not checkFile(file):
         return False
     data = loadTags(file)
+
     if andOp:
         return all(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
-    else:
-        return any(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
+
+    return any(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
 
 
 def main():
@@ -516,8 +519,6 @@ def main():
         files = sorted(args.files[0].iterdir())
     else:
         files = args.files
-
-    printit = args.print or not (args.tags or args.delete or args.clear or args.split or args.extract)
 
     if args.print or not (args.tags or args.delete or args.clear or args.empty or args.split or args.extract):
         # Printing files.   Compute the tags to print, then print 'em
@@ -536,7 +537,7 @@ def main():
 
         for file in files:
             if not checks or checkTagsRegEx(file, checks, args.andOp):
-                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.save, args.filename, args.tagname)
+                data = printTags(file, printtags, args.all, args.details, args.names, args.lists, args.filename, args.tagname)
                 if args.save and data:
                     saveTags(file, data, args.fullpath, args.relative)
     elif args.extract:
@@ -550,7 +551,6 @@ def main():
         art = data['artwork'].values[args.extract - 1]
         args.output.write(art.data)
 
-        
     elif args.clear:
         # clear all the tags.
         for f in files:

@@ -72,8 +72,11 @@ def matchFiles(srcs, dsts):
             matches.append((i, dstHash[name]))
     return matches
 
-def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=['artwork']):
+def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=None):
     #print("Processing Tree: {} to {}".format(colored(srcDir, "yellow"), colored(dstDir, "yellow")))
+    if skipTags is None:
+        skipTags = ['artwork']
+
     changes = copyDir(srcDir, dstDir, backup=backup, replace=replace, delete=delete, preserve=preserve, dryrun=dryrun, tags=tags, short=short, skiptags=skiptags)
 
     subDirs = sorted([x.name for x in srcDir.iterdir() if x.is_dir()])
@@ -91,9 +94,12 @@ def copyTree(srcDir, dstDir, backup=False, replace=False, delete=False, dryrun=F
     return changes
 
 
-def copyDir(srcDir: Path, dstDir: Path, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=[]):
+def copyDir(srcDir: Path, dstDir: Path, backup=False, replace=False, delete=False, dryrun=False, preserve=False, tags=None, short=False, skiptags=None):
     srcFiles = list(filter(lambda x: x.is_file() and isAudio(x), srcDir.iterdir()))
     dstFiles = list(filter(lambda x: x.is_file() and isAudio(x), dstDir.iterdir()))
+
+    if skiptags is None:
+        skiptags = [] 
 
     nChanges = (0, 0, 0, 0, 0)
 
@@ -196,13 +202,16 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
             nErrors += 1
     return changed, (nAdded, nReplaced, nDeleted, nErrors)
 
-def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=[]):
+def copyFile(fromPath, toPath, backup=False, replace=False, delete=False, dryrun=False, tags=None, preserve=False, short=False, skiptags=None):
     added = []
     replaced = []
     deleted = []
     errors = []
     results = (added, replaced, deleted, errors)
     changed = False
+
+    if skiptags is None:
+        skiptags = []
 
     try:
         # If requested, backup the original file

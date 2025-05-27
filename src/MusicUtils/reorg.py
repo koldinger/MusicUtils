@@ -35,6 +35,7 @@ import os
 import os.path
 import pathlib
 import shutil
+import sys
 import unicodedata
 from collections import Counter, defaultdict
 from enum import Enum
@@ -46,6 +47,11 @@ import music_tag
 import regex as re
 import unidecode
 
+# import pysnooper
+
+# from icecream import ic
+# ic.configureOutput(includeContext=True)
+# ic.disable()
 
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
@@ -59,9 +65,16 @@ class Action(Enum):
 bases_default = os.environ.get('REORG_TYPES', '').split()
 base_default = os.environ.get('REORG_BASE', '.')
 
-args = None
+args : argparse.Namespace = None
 log = None
 bases = None
+dirmode = None
+
+def octint(arg:str):
+    val = int(arg, 8)
+    if val < 0 or val > 0o777:
+        raise ValueError(f"Value {arg} ({val}) out of range (0-0777)")
+    return val
 
 def processArgs():
     _def = ' (default: %(default)s)'
@@ -88,7 +101,11 @@ def processArgs():
     parser.add_argument('--force', '-f', default=False, dest='force', action=argparse.BooleanOptionalAction,
                         help='Overwrite any existing file')
 
-    parser.add_argument('--recurse', default=True, dest='recurse', action=argparse.BooleanOptionalAction, 
+    parser.add_argument("--owner", "-o", dest='owner', default=None, help="Set file owner, uid or name")
+    parser.add_argument("--group", "-g", dest='group', default=None, help="Set file group, gid or name")
+    parser.add_argument("--mode", "-m", dest='mode', type=octint, default=None, help="Set file mode, in octal")
+
+    parser.add_argument('--recurse', default=True, dest='recurse', action=argparse.BooleanOptionalAction,
                         help='Recurse into directories' + _def)
     parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,
                         help='Rename files.  If false, only')
@@ -290,11 +307,20 @@ def dragFiles(dragfiles, destdir, length):
             log.log(logging.ACTION, f"{action} {str(file):{length}}\t==>  {dest}")
             doMove(file, dest)
 
+def setGroupMode(dest: pathlib.Path, mode=None):
+    if mode is None:
+        mode = args.mode
+    if mode is not None:
+        dest.chmod(mode)
+    if args.group or args.owner:
+        shutil.chown(dest, user=args.owner, group=args.group)
+
 def doMove(src, dest):
     if not args.test:
         if not dest.parent.exists():
             log.debug(f"Creating {dest.parent}")
             dest.parent.mkdir(parents=True, exist_ok=True)
+            setGroupMode(dest.parent, mode=dirmode)
         elif not dest.parent.is_dir():
             #log.warning(f"{dest.parent} exists, and is not a directory")
             raise NotADirectoryError("{dest.parent} exists, and is not a directory")
@@ -312,6 +338,7 @@ def doMove(src, dest):
                 shutil.copy2(src, dest)
             case _:
                 raise ValueError(f"Unknown action: {args.action}")
+        setGroupMode(dest)
 
 
 def actionName():
@@ -331,7 +358,7 @@ def actionName():
     return name
 
 
-def renameFile(file, tags, dragfiles=None, dirname=None, length=0):
+def renameFile(file, tags, dirname=None, length=0):
     action = actionName()
     if not length:
         length = len(str(file))
@@ -348,13 +375,12 @@ def renameFile(file, tags, dragfiles=None, dirname=None, length=0):
         if dest.exists():
             if not file.samefile(dest):
                 if not args.force:
-                    log.warning(f"{dest} exists, skipping ({file})")
+                    log.info(f"{dest} exists, skipping ({file})")
                     return dest
-                else:
-                    log.warning(f"Overwriting existing file {dest} with {file}")
+                log.info(f"Overwriting existing file {dest} with {file}")
 
         if args.ignorecase and file.name.lower() == dest.name.lower():
-            log.debug(f"Not moving {file.name} to {dest.name}.   Change is only in case")
+            log.warning(f"Not moving {file.name} to {dest.name}.   Change is only in case")
             return dest
 
 
@@ -431,7 +457,7 @@ def reorgDir(directory, recurse):
             composerStr = makeComposerString(composers)
 
         for finfo in audio:
-            dest = renameFile(finfo[0], finfo[1], dragfiles=dragfiles, dirname=composerStr, length=maxLen)
+            dest = renameFile(finfo[0], finfo[1], dirname=composerStr, length=maxLen)
             if dest:
                 if not dest.parent in destdirs:
                     dragFiles(dragfiles, dest.parent, maxLen)
@@ -489,12 +515,19 @@ def initLogging():
 
     return logger
 
-
 def main():
-    global args, log, bases
+    global args, log, bases, dirmode
 
     args = processArgs()
     log = initLogging()
+    dirmode = args.mode
+    if args.mode:
+        if args.mode & 0o700:
+            dirmode |= 0o100
+        if args.mode & 0o070:
+            dirmode |= 0o010
+        if args.mode & 0o007:
+            dirmode |= 0o001
 
     bases = defaultdict(lambda: args.base)
 

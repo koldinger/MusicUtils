@@ -102,7 +102,7 @@ def initLogging(verbosity) -> logging.Logger:
 def collectFiles(src):
     dirs = []
 
-    logger.debug(f"Scanning directory {src}")
+    logger.debug("Scanning directory %s", src)
 
     for i in sorted(src.iterdir()):
         if i.is_dir():
@@ -210,8 +210,7 @@ def processArgs():
     parser.add_argument('srcdir',  type=pathlib.Path, help='Root input directory')
     parser.add_argument('destdir', type=pathlib.Path, help='Root output directory')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 def main():
     global logger, args

@@ -29,20 +29,19 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import argparse
+import json
+import os
 import pathlib
 import pprint
-import tempfile
-import os
 import sys
-import json
-
+import tempfile
 from collections import Counter, defaultdict
 
-import yaml
 import music_tag
-from termcolor import cprint, colored
+import yaml
+from termcolor import colored, cprint
 
-from .Utils import isAudio, addTuples
+from .Utils import addTuples, isAudio
 
 ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags())))
 
@@ -78,8 +77,6 @@ def checkFile(file):
     return True
 
 
-stats = Counter()
-
 def doLoadFiles(files: list[pathlib.Path]):
     toLoad = [f for f in files if checkFile(f)]
     return list(map(music_tag.load_file, toLoad))
@@ -90,7 +87,7 @@ def loadFiles(files: list[pathlib.Path]):
     return doLoadFiles(files)
 
 def noList(value):
-    if type(value) is list and len(value) == 1:
+    if isinstance(value, list) and len(value) == 1:
         return value[0]
     return value
 
@@ -333,7 +330,7 @@ def confirm(prompt, default='y'):
             x = default.lower()
         if x in ['y', 'yes']:
             return True
-        elif x in ['n', 'no']:
+        if x in ['n', 'no']:
             return False
 
 def main():
@@ -363,10 +360,11 @@ def main():
                 os.system(f"{args.editor} {temp.name}")
                 try:
                     temp.seek(0)
-                    newTags = yaml.load(open(temp.name), yaml.SafeLoader)
+                    with open(temp.name) as f:
+                        newTags = yaml.load(f, yaml.SafeLoader)
                     loaded = True
                 except yaml.YAMLError as y:
-                    cprint(f"Error parsing edited file:", "red")
+                    cprint("Error parsing edited file:", "red")
                     cprint(str(y), "yellow")
                     if not confirm("Edit again: [Y/n]: "):
                         return

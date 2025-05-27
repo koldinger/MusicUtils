@@ -20,8 +20,8 @@ class NotAudioException(Exception):
 args = None
 log = None
 
-allfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'disks', 'tracks', 'albums', 'title' ] 
-trackfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'title', 'isize', 'fullpath' ] 
+allfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'disks', 'tracks', 'albums', 'title' ]
+trackfields = ['artist', 'albumartist', 'album', 'path', 'track', 'disk', 'duration', 'size', 'genre', 'format', 'title', 'isize', 'fullpath' ]
 
 def initLogging():
     global log
@@ -177,7 +177,7 @@ def printArtistInfo(artist, albums, fmt):
     duration = milliToTime(duration)
     genres = ",".join(genres)
     size = fmtSize(size, 1024, ['', 'KiB', 'MiB', 'GiB', 'TB', 'PB'])
-    values = {"artist": artist, "albumartist": artist, "album": str(albums), "title": '', "path": '', "duration": duration, 'format': '', 'genre': '', 'track': '', 'disk': '', 'tracks': tracks, 'disks': disks, 'albums': albums, 'size': size, "genre": genres}
+    values = {"artist": artist, "albumartist": artist, "album": str(albums), "title": '', "path": '', "duration": duration, 'format': '', 'genre': genres, 'track': '', 'disk': '', 'tracks': tracks, 'disks': disks, 'albums': albums, 'size': size}
     printTrackInfo(values, fmt)
 
 def printDatabase():
@@ -338,7 +338,7 @@ def main():
 
     printDatabase()
     saveDB()
-    
+
 def run():
     try:
         main()
