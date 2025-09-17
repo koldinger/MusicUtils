@@ -181,6 +181,8 @@ def demoteTags(data, includeTags=None):
     for name, sub in data.items():
         if name == TRACK_TAG:
             for i in sub:
+                if not sub[i]:
+                    continue
                 demoted[i] = common | sub[i]
         else:
             demoted |= demoteTags(sub, common)
