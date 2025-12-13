@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 dynamic = ["dependencies"]
 name =  "MusicUtils"
 description = "Command-line music manipulation utilities"
-version = "0.2"
+version = "0.3"
 requires-python = ">= 3.10"
 authors = [
   { name = "Eric Koldinger", email="kolding@washington.edu" }
