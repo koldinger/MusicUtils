@@ -174,7 +174,7 @@ def checkConsistency(directory, details):
         diskdata = splitByDisk(data)
         numdisks = getValues('totaldisks', data)
         if len(numdisks) > 1:
-            report(f"Unable to check number of disks.  Inconsistent values: {fmtTuples(numdisks)}")
+            report(f"Unable to check number of disks.  Inconsistent values: {list(numdisks)}")
         elif numdisks:
             num = numdisks.pop()
             if len(diskdata) != num:
@@ -198,7 +198,7 @@ def checkConsistency(directory, details):
                         report(f"Missing tag {tag} in files for disk {disk} in {missing}")
             totaltracks = getValues('totaltracks', dData)
             if len(totaltracks) > 1:
-                report(f"Unable to check number of disks.  Inconsistent values: {list(totaltracks)}")
+                report(f"Unable to check number of tracks.  Inconsistent values: {list(totaltracks)}")
             elif totaltracks:
                 num = totaltracks.pop()
                 if len(dData) != num:
@@ -243,6 +243,7 @@ def quoteComma(x):
     return x
 
 def fmtTuples(x):
+    ic(x)
     return ", ".join(map(fmtTuple, map(quoteComma, x)))
 
 
