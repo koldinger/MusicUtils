@@ -30,6 +30,7 @@
 
 
 import csv
+import contextlib
 import io
 import json
 import os
@@ -56,13 +57,11 @@ from .Utils import isAudio
 
 # Extract the list of valid tags from the music_tag module.
 ALL_TAGS = sorted(music_tag.tags())
-VALID_TAGS = sorted([i for i in map(str.upper, ALL_TAGS) if not i.startswith('#')])
+VALID_TAGS = sorted([i for i in map(str.upper, ALL_TAGS) if not i.startswith("#")])
 
 class TagArgument:
-    """
-    Creates an argument with two fields, tag and value, based on a equals sign (=) in
-    the input.
-    """
+    """ Creates an argument with two fields, tag and value, based on a equals sign (=) in the input. """
+
     def __init__(self, string):
         try:
             tag, value = string.split("=", 1)
@@ -74,7 +73,7 @@ class TagArgument:
         #print(f"Creating {tag} {value} from {string}")
         self.tag = checkTag(tag.strip())
         self.value=value
-        if self.tag.startswith('#'):
+        if self.tag.startswith("#"):
             raise ArgumentTypeError(f"Cannot set readonly tag {tag}")
 
     def __str__(self):
@@ -87,10 +86,9 @@ def makeTagArgument(tag, value):
     return TagArgument(f"{tag}={value}")
 
 def backupFile(path):
-    """
-    Backup a file before processing it.
-    """
-    bupPath = pathlib.Path(path.with_suffix(path.suffix + '.bak'))
+    """ Backup a file before processing it. """
+
+    bupPath = pathlib.Path(path.with_suffix(path.suffix + ".bak"))
     print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
 
@@ -103,9 +101,8 @@ def makeTagValues(tags):
     return ret
 
 def checkTag(tag, additional=None):
-    """
-    Make sure a tag is in a list of the valid tags that can be set.
-    """
+    """ Make sure a tag is in a list of the valid tags that can be set. """
+
     tup = tag.upper()
 
     if not (tup in VALID_TAGS or (additional and tup in additional)):
@@ -113,7 +110,7 @@ def checkTag(tag, additional=None):
     return tup
 
 def checkTagAll(tag):
-    return checkTag(tag, additional=['ALL'])
+    return checkTag(tag, additional=["ALL"])
 
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"+\
@@ -125,41 +122,41 @@ def parseArgs():
                             epilog=epilog,
                             formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
-    setGroup.add_argument("--tags", "-t",     default=[], dest='tags', type=TagArgument, action='append', nargs='+', help='List of tags to apply.  Ex: --tags "artist=The Beatles" "album=Abbey Road"')
-    setGroup.add_argument("--delete", "-d",   type=checkTag,  action='append', nargs='+', metavar='TAG', help='List of tags to delete.   Ex: --delete artist artistsort')
+    setGroup.add_argument("--tags", "-t",     default=[], dest="tags", type=TagArgument, action="append", nargs="+", help="List of tags to apply.  Ex: --tags 'artist=The Beatles' 'album=Abbey Road'")
+    setGroup.add_argument("--delete", "-d",   type=checkTag,  action="append", nargs="+", metavar="TAG", help="List of tags to delete.   Ex: --delete artist artistsort")
     setGroup.add_argument("--append", "-a",   type=bool, action=BooleanOptionalAction, default=False, help="Add values to current tag")
-    setGroup.add_argument("--clear", '-C',    type=bool, action=BooleanOptionalAction, default=False, help='Remove all tags')
-    setGroup.add_argument("--empty", '-e',    type=bool, action=BooleanOptionalAction, default=False, help='Remove empty tags')
-    setGroup.add_argument("--split",          type=checkTagAll, nargs='*', action='append', metavar='TAG', default=None, help='List of tags to apply splitting to')
-    setGroup.add_argument("--splitchars",     type=str,  default=';/', help='List of characters to use to split tags')
+    setGroup.add_argument("--clear", "-C",    type=bool, action=BooleanOptionalAction, default=False, help="Remove all tags")
+    setGroup.add_argument("--empty", "-e",    type=bool, action=BooleanOptionalAction, default=False, help="Remove empty tags")
+    setGroup.add_argument("--split",          type=checkTagAll, nargs="*", action="append", metavar="TAG", default=None, help="List of tags to apply splitting to")
+    setGroup.add_argument("--splitchars",     type=str,  default=";/", help="List of characters to use to split tags")
     setGroup.add_argument("--preserve", "-p", type=bool, action=BooleanOptionalAction, default=False, help="Preserve timestamps")
 
     printGroup = parser.add_argument_group("Printing Options")
-    printGroup.add_argument("--print", "-P",    type=checkTag,  action='append', nargs='*', metavar='TAG', default=None, help="Print current tags (no changes made)")
+    printGroup.add_argument("--print", "-P",    type=checkTag,  action="append", nargs="*", metavar="TAG", default=None, help="Print current tags (no changes made)")
     printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print tags, including read-only encoding details (starts with #)")
     printGroup.add_argument("--all", "-A",      type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
     printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
-    printGroup.add_argument("--value", "-V",    type=TagArgument, action='append', nargs='+', metavar='TAG=Value', default=[], help="Print only if the tag matches (value is a regular expression)")
-    printGroup.add_argument('--ignorecase', '-I', type=bool, action=BooleanOptionalAction, default=False, help="Ignore case on comparisons")
-    printGroup.add_argument('--names', '-N',    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
+    printGroup.add_argument("--value", "-V",    type=TagArgument, action="append", nargs="+", metavar="TAG=Value", default=[], help="Print only if the tag matches (value is a regular expression)")
+    printGroup.add_argument("--ignorecase", "-I", type=bool, action=BooleanOptionalAction, default=False, help="Ignore case on comparisons")
+    printGroup.add_argument("--names", "-N",    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
     printGroup.add_argument("--filename",       type=bool, action=BooleanOptionalAction, default=True, help="Print filename")
     printGroup.add_argument("--tagname",        type=bool, action=BooleanOptionalAction, default=True, help="Print tag name")
 
     artGroup = parser.add_argument_group("Artwork Extraction Options")
-    artGroup.add_argument("--extract", "-E",  type=int, nargs='?', default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
-    artGroup.add_argument("--output", "-O",   type=FileType('wb'), default=sys.stdout.buffer, help="Output file for artwork.   Default is stdout")
+    artGroup.add_argument("--extract", "-E",  type=int, nargs="?", default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
+    artGroup.add_argument("--output", "-O",   type=FileType("wb"), default=sys.stdout.buffer, help="Output file for artwork.   Default is stdout")
 
     andOr = printGroup.add_mutually_exclusive_group()
-    andOr.add_argument("--and", dest='andOp', action='store_true',  default='True', help="Only print if all values match ")
-    andOr.add_argument("--or",  dest='andOp', action='store_false', default='True', help="Print if any values match ")
+    andOr.add_argument("--and", dest="andOp", action="store_true",  default="True", help="Only print if all values match ")
+    andOr.add_argument("--or",  dest="andOp", action="store_false", default="True", help="Print if any values match ")
 
     saveGroup = parser.add_argument_group("Tag Saving Options (not in music file)")
-    saveGroup.add_argument('--save', '-S',     type=FileType('w'), default=None, help="Save tags to a file")
-    saveGroup.add_argument('--format', '-F',   type=str, choices=['json', 'yaml', 'csv'], default='yaml', help="Format to use when saving files")
+    saveGroup.add_argument("--save", "-S",     type=FileType("w"), default=None, help="Save tags to a file")
+    saveGroup.add_argument("--format", "-F",   type=str, choices=["json", "yaml", "csv"], default="yaml", help="Format to use when saving files")
 
     pathGroup = saveGroup.add_mutually_exclusive_group()
-    pathGroup.add_argument('--relative', '-R', type=pathlib.Path, default='.', help="Print paths relative to this directory")
-    pathGroup.add_argument('--fullpath',       type=bool, action=BooleanOptionalAction, default=False, help="Use full paths")
+    pathGroup.add_argument("--relative", "-R", type=pathlib.Path, default=".", help="Print paths relative to this directory")
+    pathGroup.add_argument("--fullpath",       type=bool, action=BooleanOptionalAction, default=False, help="Use full paths")
 
     parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--stats", "-s",    type=bool, action=BooleanOptionalAction, default=False, help="Print stats")
@@ -168,16 +165,15 @@ def parseArgs():
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:
         makeTagValFunc = partial(makeTagArgument, arg)
-        group.add_argument(f"--{arg.upper()}", f"--{arg.lower()}", nargs=1, dest="tags", type=makeTagValFunc, action='append', help=SUPPRESS)   #f"Set the {arg} tag")
+        group.add_argument(f"--{arg.upper()}", f"--{arg.lower()}", nargs=1, dest="tags", type=makeTagValFunc, action="append", help=SUPPRESS)   #f"Set the {arg} tag")
 
-    parser.add_argument(type=pathlib.Path,  nargs='+', dest='files', help='Files to change')
+    parser.add_argument(type=pathlib.Path,  nargs="+", dest="files", help="Files to change")
 
     return parser.parse_args()
 
 def flatten(l):
-    """
-    Flatten nested sublists to all be a single list.
-    """
+    """ Flatten nested sublists to all be a single list. """
+
     if isinstance(l, list):
         return [num for sublist in l for num in sublist]
     return l
@@ -185,15 +181,17 @@ def flatten(l):
 @lru_cache(maxsize=64)
 def readfile(url):
     """
-    Read a file, and cache the results.   For artwork, so we don't have to read the art files multiple times
+    Read a file, and cache the results.
+
+    For artwork, so we don't have to read the art files multiple times
     :param name: The filename to read
     :return: The bytes in the file
     """
     info = urllib.parse.urlparse(url)
-    if info.scheme in ['', 'file']:
+    if info.scheme in ["", "file"]:
         with open(info.path, "rb") as f:
             return f.read()
-    if info.scheme in ['http', 'https']:
+    if info.scheme in ["http", "https"]:
         response = requests.get(url, timeout=60)
         response.raise_for_status()
         return response.content
@@ -201,9 +199,7 @@ def readfile(url):
 
 @lru_cache(maxsize=64)
 def imageInfo(name):
-    """
-    Read an image file, and generate it's image info
-    """
+    """ Read an image file, and generate it's image info """
     data = readfile(name)
     mime = magic.from_buffer(data, mime=True)
     image = Image.open(io.BytesIO(data))
@@ -220,27 +216,28 @@ def loadTags(file):
 def checkFile(file):
     """
     Check to determine if a file exists, and is an audio file.
+
     :param file:
     :return: True if it exists and is audio, false otherwise
     """
     try:
         if file.is_dir():
-            print(f"{colored('Error: ', 'red')} {file} is a directory")
+            print(f"{colored("Error: ", "red")} {file} is a directory")
             return False
         if not (file.is_file() and isAudio(file)):
-            print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
+            print(f"{colored("Error: ", "red")} {file} isn't an audio file")
             return False
     except FileNotFoundError:
-        print(f"{colored('Error: ', 'red')} {file} not found")
+        print(f"{colored("Error: ", "red")} {file} not found")
         return False
     return True
 
 
-stats = { 'processed': 0, 'updated'  : 0, 'added'    : 0, 'changed'  : 0, 'deleted'  : 0, 'split': 0 }
+stats = { "processed": 0, "updated"  : 0, "added"    : 0, "changed"  : 0, "deleted"  : 0, "split": 0 }
 
 def processFile(file, tags, splits, delete, preserve, append, empty, splitchars, dryrun):
     """
-    Process a file, changing the tags appropriately
+    Process a file, changing the tags appropriately.
 
     Parameters:
        file: A Path object pointing to the file in question.
@@ -259,11 +256,11 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
     data = loadTags(file)
     updated = False
 
-    stats['processed'] += 1
+    stats["processed"] += 1
     times = file.stat()
     for tag in tags:
         try:
-            if tag.lower() == 'artwork':
+            if tag.lower() == "artwork":
                 values = list(map(music_tag.file.Artwork, map(readfile, tags[tag])))
             else:
                 values = tags[tag]
@@ -271,27 +268,22 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
             try:
                 curVals = set(data[tag].values)
             except ValueError as e:
-                cprint(f'{e}: zeroing', 'red')
+                cprint(f"{e}: zeroing", "red")
                 curVals = set()
 
             # If current values, we've changed it, else adding a tag.
-            action = 'changed' if curVals else 'added'
+            action = "changed" if curVals else "added"
+
             # Generate the new set of values
-            if append:
-                newVals = list(set(values).union(curVals))
-            else:
-                newVals = list(values)
+            newVals = list(set(values).union(curVals)) if append else list(values)
 
             if set(newVals) == curVals:
                 # if nothing has changed, skip it.
                 continue
 
-            if tag.lower() == 'artwork':
+            if tag.lower() == "artwork":
                 # If we're doing artwork, generate a readable version and print it, other than the raw value
-                if append:
-                    vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values)))
-                else:
-                    vals = list(map(imageInfo, tags[tag]))
+                vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values))) if append else list(map(imageInfo, tags[tag]))
                 qprint(f"    Setting tag {tag.upper()} to {vals}")
             else:
                 # Otherwise, just print the new values
@@ -302,17 +294,17 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
             stats[action] += 1
             updated = True
         except KeyError as k:
-            cprint(f'Invalid tag name {k}', 'red', file=sys.stderr)
+            cprint(f"Invalid tag name {k}", "red", file=sys.stderr)
         except FileNotFoundError as e:
-            cprint(f'Could not read artwork file {e.filename} {e}', 'red', file=sys.stderr)
+            cprint(f"Could not read artwork file {e.filename} {e}", "red", file=sys.stderr)
             #traceback.print_exc()
         except ValueError as v:
-            cprint(v, 'red', file=sys.stderr)
+            cprint(v, "red", file=sys.stderr)
 
     splitpat = f"[{splitchars}]"
     if splits:
         for tag in splits:
-            if tag.lower() == 'artwork':
+            if tag.lower() == "artwork":
                 continue
             try:
                 curVals = set(map(str, data[tag].values))
@@ -325,9 +317,9 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
                     qprint(f"    Splitting tag {tag} to {newVals}")
                     data[tag.upper()] = list(newVals)
                     updated = True
-                    stats['split'] += 1
+                    stats["split"] += 1
             except ValueError as v:
-                cprint(v, 'red', file=sys.stderr)
+                cprint(v, "red", file=sys.stderr)
 
     if delete:
         for tag in delete:
@@ -335,7 +327,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
                 qprint(f"    Removing tag {tag}")
                 data.remove_tag(tag)
                 updated = True
-                stats['deleted'] += 1
+                stats["deleted"] += 1
 
     if empty:
         for tag, value in data.items():
@@ -343,10 +335,10 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
                 qprint(f"    Removing empty tag {tag}")
                 data.remove_tag(tag)
                 updated = True
-                stats['deleted'] += 1
+                stats["deleted"] += 1
 
     if updated:
-        stats['updated'] += 1
+        stats["updated"] += 1
     if not dryrun and updated:
         data.save()
         if preserve:
@@ -369,16 +361,16 @@ def removeTags(file, preserve, dryrun):
             os.utime(file, times=(times.st_atime, times.st_mtime))
 
 orderedTags = {
-    'title': '00',
-    'album': '01',
-    'artist': '02',
-    'tracknumber': '03',
-    'discnumber': '03',
-    'discsubtitle': '04'
+    "title": "00",
+    "album": "01",
+    "artist": "02",
+    "tracknumber": "03",
+    "discnumber": "03",
+    "discsubtitle": "04"
     }
 
 def tagKey(key):
-    return orderedTags.get(key.lower(), '99') + key
+    return orderedTags.get(key.lower(), "99") + key
 
 
 def printTags(file, tags, empty, details, names, printList, filenames=True, tagnames=True):
@@ -408,23 +400,20 @@ def printTags(file, tags, empty, details, names, printList, filenames=True, tagn
         try:
             if tags and not tag in tags:
                 continue
-            if tag.startswith('#') and not details:
+            if tag.startswith("#") and not details:
                 continue
             if data[tag] or empty:
                 if printFile:
                     cprint(f"File: {file}", "green")
                     printFile = False
-                if tagnames:
-                    t = f"{tag:27}: "
-                else:
-                    t = ""
+                t = f"{tag:27}: " if tagnames else ""
                 if printList:
                     print(f"{t}{data[tag]}")
                 else:
                     for i in data[tag].values:
                         print(f"{t}{i}")
         except Exception as e:
-            cprint(f"Caught exception processing tag {tag}: {e}", 'red', file=sys.stderr)
+            cprint(f"Caught exception processing tag {tag}: {e}", "red", file=sys.stderr)
     return data
 
 savedData={}
@@ -442,10 +431,8 @@ def saveTags(file, tagData, fullpath, relative):
     if fullpath:
         file = file.absolute()
     elif relative:
-        try:
+        with contextlib.supress(ValueError):
             file = file.absolute().relative_to(relative.absolute())
-        except ValueError:
-            pass
 
     data = {}
     for tag in tagData.tags():
@@ -453,7 +440,7 @@ def saveTags(file, tagData, fullpath, relative):
         if len(d) == 0:
             continue
 
-        if len(d) == 1 and tag.lower() != 'artwork':
+        if len(d) == 1 and tag.lower() != "artwork":
             # Ignore artwork, it will get converted to a string below.   We mostly want to keep Int's valid here.
             d = d[0]
         else:
@@ -464,7 +451,7 @@ def saveTags(file, tagData, fullpath, relative):
 
 beQuiet = False
 def qprint(*args):
-    """ Print as long as we're not expected to be quiet """
+    """ Print as long as we're not expected to be quiet. """
     if not beQuiet:
         print(*args)
 
@@ -545,10 +532,10 @@ def main():
             cprint("Only one file allowed with extract", "red", file=sys.stderr)
             sys.exit(1)
         data = loadTags(files[0])
-        if args.extract < 1 or args.extract > len(data['ARTWORK']):
+        if args.extract < 1 or args.extract > len(data["ARTWORK"]):
             cprint(f"Invalid image number {args.extract}.   File contains {len(data['ARTWORK'])} images", "red", file=sys.stderr)
             sys.exit(1)
-        art = data['artwork'].values[args.extract - 1]
+        art = data["artwork"].values[args.extract - 1]
         args.output.write(art.data)
 
     elif args.clear:
@@ -560,7 +547,7 @@ def main():
         # Else we're setting tags.
         tags   = makeTagValues(flatten(args.tags))
         splits = flatten(args.split)
-        if args.split and (not splits or 'ALL' in splits):
+        if args.split and (not splits or "ALL" in splits):
             splits=VALID_TAGS
 
         delete = flatten(args.delete)
@@ -575,16 +562,16 @@ def main():
 
     if args.save:
         match args.format:
-            case 'json':
+            case "json":
                 json.dump(savedData, args.save, indent=4)
-            case 'yaml':
+            case "yaml":
                 args.save.write(yaml.dump(savedData, allow_unicode=True))
-            case 'csv':
-                writer = csv.DictWriter(args.save, fieldnames=['name'] + ALL_TAGS)
+            case "csv":
+                writer = csv.DictWriter(args.save, fieldnames=["name"] + ALL_TAGS)
                 writer.writeheader()
                 for i in sorted(savedData.keys()):
                     row = savedData[i]
-                    row['name'] = str(i)
+                    row["name"] = str(i)
                     writer.writerow(row)
 
 
@@ -594,5 +581,5 @@ def run():
     except KeyboardInterrupt:
         cprint("Interrupted", "red")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()
