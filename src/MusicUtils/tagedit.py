@@ -78,8 +78,15 @@ def checkFile(file):
 
 
 def doLoadFiles(files: list[pathlib.Path]):
+    ret = []
     toLoad = [f for f in files if checkFile(f)]
-    return list(map(music_tag.load_file, toLoad))
+    for i in toLoad:
+        try:
+            ret.append(music_tag.load_file(i))
+        except NotImplementedError:
+            cprint(f"Unable to load file: {i}", "red")
+
+    return ret
 
 def loadFiles(files: list[pathlib.Path]):
     if len(files) == 1 and files[0].is_dir():
