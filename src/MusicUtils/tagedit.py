@@ -43,7 +43,7 @@ from termcolor import colored, cprint
 
 from .Utils import addTuples, isAudio
 
-ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith('#') and not x.upper() == 'ARTWORK', music_tag.tags())))
+ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith("#") and x.upper() != "ARTWORK", music_tag.tags())))
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Edit the tags in a collect of files")
@@ -53,15 +53,15 @@ def parseArgs():
                         help="Delete tags from destination that don't exist in source")
     parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False,
                         help="Preserve timestamps")
-    parser.add_argument("--save", "-s", type=argparse.FileType('w'), default=None, help="Save the generated tag data to a file")
-    parser.add_argument("--load", "-l", type=argparse.FileType('r'), default=None, help="Load the generated tag data from a file")
+    parser.add_argument("--save", "-s", type=argparse.FileType("w"), default=None, help="Save the generated tag data to a file")
+    parser.add_argument("--load", "-l", type=argparse.FileType("r"), default=None, help="Load the generated tag data from a file")
     parser.add_argument("--edit", "-e", action=argparse.BooleanOptionalAction, default=True, help="Inoke an editor to edit the generated data")
-    parser.add_argument("--format", "-f", type=str, choices=['json', 'yaml'], default='yaml', help="Format in which to save/load data")
+    parser.add_argument("--format", "-f", type=str, choices=["json", "yaml"], default="yaml", help="Format in which to save/load data")
     parser.add_argument("--promote", "-P", action=argparse.BooleanOptionalAction, default=True, help="Promote common elements to the album or disc level")
     parser.add_argument("--confirm", "-C", action=argparse.BooleanOptionalAction, default=True, help="Confirm writing of files")
     parser.add_argument("--dryrun", "-n", action=argparse.BooleanOptionalAction, default=False, help="Inoke an editor to edit the generated data")
-    parser.add_argument("--editor", "-E", type=str, default=os.environ.get('EDITOR', 'nano'), help="Editor to use")
-    parser.add_argument(type=pathlib.Path, nargs='+', dest='files', help='Files to change')
+    parser.add_argument("--editor", "-E", type=str, default=os.environ.get("EDITOR", "nano"), help="Editor to use")
+    parser.add_argument(type=pathlib.Path, nargs="+", dest="files", help="Files to change")
 
     return parser.parse_args()
 
@@ -69,7 +69,7 @@ def parseArgs():
 def checkFile(file):
     try:
         if not (file.is_file() and isAudio(file)):
-            #print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
+            #print(f"{colored("Error: ", "red")} {file} isn't an audio file")
             return False
     except FileNotFoundError:
         print(f"{file} not found")
@@ -99,8 +99,9 @@ def noList(value):
     return value
 
 def makeDict(tags):
-    d = dict(map(lambda x: (x, noList(tags[x].values)),
-                 [f for f in tags.keys() if f != 'artwork' and not f.startswith('#')]))
+    #d = dict(map(lambda x: (x, noList(tags[x].values)),
+    #[f for f in tags if f != "artwork" and not f.startswith("#")]))
+    d = { x: noList(tags[x].values) for x in tags if x != "artwork" and not x.startswith("#") }
     return d
 
 def consolidateTag(data, tag):
@@ -123,8 +124,8 @@ def listToTuple(x):
         return tuple(x)
     return x
 
-COMMON_TAG = 'common'
-TRACK_TAG = 'tracks'
+COMMON_TAG = "common"
+TRACK_TAG = "tracks"
 
 def promoteTags(tags):
     consolidated = {}
@@ -169,7 +170,7 @@ def promoteAndPartition(tags, fields):
             name = subName
     else:
         subData = tracks
-        name = 'tracks'
+        name = "tracks"
 
     return name, common, subData
 
@@ -200,6 +201,7 @@ def demoteTags(data, includeTags=None):
 def copyTags(frTags, toTags, tags, replace, delete, details=None):
     """
     Perform the actual copy of tags from one set to another.
+
     Arguments:
         frTags: The set of tags to copy from.   music_tags.MediaInfo
         toTags: The set of tags to copy to.     music_tags.MediaInfo
@@ -212,9 +214,11 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
                     replaced will contain a list of tuples (tagname, newValue, oldValue)
                     deleted will contain a list of tuples (tagname, oldValue)
                     errors will contain a list of tuples (tagname, exception)
+
     Returns:
         A boolean indicating if anything changed
         A 4-tuple, containg a count of each value number of tags added, replaced, deleted, and errors
+
     """
     nReplaced = 0
     nAdded = 0
@@ -225,8 +229,8 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     if details:
         (added, replaced, deleted, errors) = details
 
-    for tag in frTags.keys():
-        if not tag in ALL_TAGS:
+    for tag in frTags:
+        if tag not in ALL_TAGS:
             cprint(f"Unknown tag {tag} for file {toTags.filename}", "red")
 
     for tag in tags:
@@ -246,7 +250,7 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
             if frValue:
                 if toValue:
                     #print(tag, "--", frValue, ":", toValue.values)
-                    if tag == 'artwork':
+                    if tag == "artwork":
                         # TODO: This should check all artwork, but I'm lazy, assuming only one in my library.
                         if frValue.first.data == toValue.first.data:
                             continue
@@ -278,17 +282,20 @@ def copyTags(frTags, toTags, tags, replace, delete, details=None):
     return changed, (nAdded, nReplaced, nDeleted, nErrors)
 
 def printSummary(file, details):
-    cprint(f"Setting tags in {file.filename.name}", 'yellow')
+    cprint(f"Setting tags in {file.filename.name}", "yellow")
     (added, replaced, deleted, _) = details
     if added:
-        tags = list(map(lambda x: x[0], added))
-        print(f"{colored('Added', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+        #tags = list(map(lambda x: x[0], added))
+        tags = [x[0] for x in added]
+        print(f'{colored("Added", "cyan"):17}: {pprint.pformat(tags, compact=True, width=132)}')
     if replaced:
-        tags = list(map(lambda x: x[0], replaced))
-        print(f"{colored('Replaced', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+        #tags = list(map(lambda x: x[0], replaced))
+        tags = [x[0] for x in replaced]
+        print(f'{colored("Replaced", "cyan"):17}: {pprint.pformat(tags, compact=True, width=132)}')
     if deleted:
-        tags = list(map(lambda x: x[0], deleted))
-        print(f"{colored('Deleted', 'cyan'):17}: {pprint.pformat(tags, compact=True, width=132)}")
+        #tags = list(map(lambda x: x[0], deleted))
+        tags = [x[0] for x in deleted]
+        print(f'{colored("Deleted", "cyan"):17}: {pprint.pformat(tags, compact=True, width=132)}')
     #if not (added or deleted or replaced):
     #    cprint("Nothing changed", "cyan")
 
@@ -320,26 +327,26 @@ def setTags(newData, currentData, replace, delete):
 
 def saveTags(tags, file, format):
     match format:
-        case 'json':
+        case "json":
             json.dump(tags, file, indent=4)
-        case 'yaml':
+        case "yaml":
             file.write(yaml.dump(tags, allow_unicode=True))
 
-def loadTags(file, format):
-    match format:
-        case 'json':
+def loadTags(file, fmt):
+    match fmt:
+        case "json":
             return json.load(file)
-        case 'yaml':
+        case "yaml":
             return yaml.load(file, yaml.SafeLoader)
 
-def confirm(prompt, default='y'):
+def confirm(prompt, default="y"):
     while True:
         x = input(prompt).strip().lower()
         if not x:
             x = default.lower()
-        if x in ['y', 'yes']:
+        if x in ["y", "yes"]:
             return True
-        if x in ['n', 'no']:
+        if x in ["n", "no"]:
             return False
 
 def main():
@@ -354,11 +361,12 @@ def main():
     if args.load:
         origTags = loadTags(args.load, args.format)
     else:
-        origTags = dict(map(lambda x: (x.filename.name, makeDict(x)), fileData))
+        #origTags = dict(map(lambda x: (x.filename.name, makeDict(x)), fileData))
+        origTags = {x.filename.name: makeDict(x) for x in fileData}
 
     # If we're using the "promotion" feature, promote all and disc values
     if args.promote and len(origTags) > 1:
-        origTags = doPromotion(origTags, [('albums', 'album'), ('discs', 'discnumber'), ('works', 'work')])
+        origTags = doPromotion(origTags, [("albums", "album"), ("discs", "discnumber"), ("works", "work")])
 
     with tempfile.NamedTemporaryFile("w+") as temp:
         temp.write(yaml.dump(origTags, allow_unicode=True))
@@ -392,7 +400,7 @@ def main():
             if changedFiles:
                 if not args.confirm or confirm("Write changes [Y/n]: "):
                     for file in fileData:
-                        if not file.filename.name in changedFiles:
+                        if file.filename.name not in changedFiles:
                             continue
                         times = file.filename.stat()
                         file.save()
@@ -409,5 +417,5 @@ def run():
         cprint("Interrupted", "red")
         sys.exit(1)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run()

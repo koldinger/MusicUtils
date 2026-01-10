@@ -87,7 +87,6 @@ def makeTagArgument(tag, value):
 
 def backupFile(path):
     """ Backup a file before processing it. """
-
     bupPath = pathlib.Path(path.with_suffix(path.suffix + ".bak"))
     print(f"Backing up {path} to {bupPath}")
     shutil.copy2(path, bupPath)
@@ -102,7 +101,6 @@ def makeTagValues(tags):
 
 def checkTag(tag, additional=None):
     """ Make sure a tag is in a list of the valid tags that can be set. """
-
     tup = tag.upper()
 
     if not (tup in VALID_TAGS or (additional and tup in additional)):
@@ -113,9 +111,9 @@ def checkTagAll(tag):
     return checkTag(tag, additional=["ALL"])
 
 def parseArgs():
-    epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"+\
-             "Valid tags are: \n" +\
-             f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}" +\
+    epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"\
+             "Valid tags are: \n"\
+             f"{textwrap.fill(', '.join(VALID_TAGS), width=80, initial_indent='    ', subsequent_indent='    ')}"\
              "\n\nArtwork tags take either a file path or a URL"
 
     parser = ArgumentParser(description="Set or print tags in an audio file",
@@ -171,12 +169,11 @@ def parseArgs():
 
     return parser.parse_args()
 
-def flatten(l):
+def flatten(thing):
     """ Flatten nested sublists to all be a single list. """
-
-    if isinstance(l, list):
-        return [num for sublist in l for num in sublist]
-    return l
+    if isinstance(thing, list):
+        return [num for sublist in thing for num in sublist]
+    return thing
 
 @lru_cache(maxsize=64)
 def readfile(url):
@@ -199,7 +196,7 @@ def readfile(url):
 
 @lru_cache(maxsize=64)
 def imageInfo(name):
-    """ Read an image file, and generate it's image info """
+    """ Read an image file, and generate it's image info. """
     data = readfile(name)
     mime = magic.from_buffer(data, mime=True)
     image = Image.open(io.BytesIO(data))
@@ -222,13 +219,13 @@ def checkFile(file):
     """
     try:
         if file.is_dir():
-            print(f"{colored("Error: ", "red")} {file} is a directory")
+            print(f"{colored('Error: ', 'red')} {file} is a directory")
             return False
         if not (file.is_file() and isAudio(file)):
-            print(f"{colored("Error: ", "red")} {file} isn't an audio file")
+            print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
     except FileNotFoundError:
-        print(f"{colored("Error: ", "red")} {file} not found")
+        print(f"{colored('Error: ', 'red')} {file} not found")
         return False
     return True
 
@@ -239,15 +236,18 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
     """
     Process a file, changing the tags appropriately.
 
-    Parameters:
+    Parameters
+    ----------
        file: A Path object pointing to the file in question.
        tags: A list of TagArguments for tags to set
+       splits: A list of tags to split
        delete: A list of tags to delete
        preserve: Boolean, preserve the timestamps
        append: Boolean, append new values to current list.  If false, current values will be kept
        empty: Delete empty tags
        splitchars: String, containing the characters to split on
        dryrun: Boolean, if true, don't write output, only process and test.
+
     """
     if not checkFile(file):
         return None
@@ -347,7 +347,7 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
     return data
 
 def removeTags(file, preserve, dryrun):
-    """ Remove all tags from the file """
+    """ Remove all tags from the file. """
     if not checkFile(file):
         return
     times = file.stat()
@@ -366,7 +366,7 @@ orderedTags = {
     "artist": "02",
     "tracknumber": "03",
     "discnumber": "03",
-    "discsubtitle": "04"
+    "discsubtitle": "04",
     }
 
 def tagKey(key):
@@ -377,14 +377,16 @@ def printTags(file, tags, empty, details, names, printList, filenames=True, tagn
     """
     Print tags from a file.
 
-    Parameters:
+    Parameters
+    ----------
     file (Path):        file to load tags from and to print.
     tags (list[str]):   list of tags to print
     empty   (bool):     print all the tags, even those with empty/no value
     details (bool):     include those that start with a # sign
     names   (bool):     Only print the name of the file
     printList(bool):    Print all elements of a list together
-    save    (bool):     Save the tags for later processing
+    save    (bool):     Save the tags for later processin
+
     """
     if not checkFile(file):
         return None
@@ -398,7 +400,7 @@ def printTags(file, tags, empty, details, names, printList, filenames=True, tagn
 
     for tag in map(str.upper, sorted(data.tags(), key=tagKey)):
         try:
-            if tags and not tag in tags:
+            if tags and tag not in tags:
                 continue
             if tag.startswith("#") and not details:
                 continue
@@ -421,13 +423,14 @@ def saveTags(file, tagData, fullpath, relative):
     """
     Accumulate data to save a json/yaml/csv catalog file.
 
-    Parameters:
+    Parameters
+    ----------
     file (Path): Path of the file we're processing
     tagData(dict):  Tag data to save.
     fullpath(bool): Use full pathnames
     relative(Path): Print files relative to this path
-    """
 
+    """
     if fullpath:
         file = file.absolute()
     elif relative:
@@ -440,11 +443,8 @@ def saveTags(file, tagData, fullpath, relative):
         if len(d) == 0:
             continue
 
-        if len(d) == 1 and tag.lower() != "artwork":
-            # Ignore artwork, it will get converted to a string below.   We mostly want to keep Int's valid here.
-            d = d[0]
-        else:
-            d = ", ".join(map(str, d))
+        # Build a nice list.   Don't deal with artwork at this point.  That comes later.
+        d = d[0] if len(d) == 1 and tag.lower() != "artwork" else ", ".join(map(str, d))
 
         data[tag] = d
     savedData[str(file)] = data
@@ -490,9 +490,9 @@ def checkTagsRegEx(file, checks, andOp=True):
     data = loadTags(file)
 
     if andOp:
-        return all(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
+        return all([checkTagRegEx(data, x[0], x[1]) for x in  checks])
 
-    return any(map(lambda x: checkTagRegEx(data, x[0], x[1]), checks))
+    return any([checkTagRegEx(data, x[0], x[1]) for x in checks])
 
 
 def main():
@@ -567,7 +567,7 @@ def main():
             case "yaml":
                 args.save.write(yaml.dump(savedData, allow_unicode=True))
             case "csv":
-                writer = csv.DictWriter(args.save, fieldnames=["name"] + ALL_TAGS)
+                writer = csv.DictWriter(args.save, fieldnames=["name", *ALL_TAGS])
                 writer.writeheader()
                 for i in sorted(savedData.keys()):
                     row = savedData[i]

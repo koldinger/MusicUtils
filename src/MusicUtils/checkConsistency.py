@@ -13,15 +13,15 @@ import music_tag
 tag_counts = collections.defaultdict(collections.Counter)
 
 def isAudio(path):
-    return magic.from_file(str(path), mime=True).startswith('audio/')
+    return magic.from_file(str(path), mime=True).startswith("audio/")
 
 def parse_args():
-    p = argparse.ArgumentParser("Check music files for consistent tagging")
-    p.add_argument('--recurse', '-R', dest='recurse', default=False, action=argparse.BooleanOptionalAction, help='Recurse through the tree')
-    p.add_argument('--details', '-d', dest='details', default=False, action=argparse.BooleanOptionalAction, help='Print full details of inconsistencies')
-    p.add_argument('directories', type=Path, nargs='+', help="Directories to check")
+    parser = argparse.ArgumentParser("Check music files for consistent tagging")
+    parser.add_argument("--recurse", "-R", dest="recurse", default=False, action=argparse.BooleanOptionalAction, help="Recurse through the tree")
+    parser.add_argument("--details", "-d", dest="details", default=False, action=argparse.BooleanOptionalAction, help="Print full details of inconsistencies")
+    parser.add_argument("directories", type=Path, nargs="+", help="Directories to check")
 
-    args = p.parse_args()
+    args = parser.parse_args()
     return args
 
 def loadTags(d):
@@ -43,10 +43,7 @@ def collectAndCheck(tag, data):
     for file in data:
         x = data[file].get(tag)
         if x:
-            if tag == 'artwork':
-                tagVals = map(str, x.values)
-            else:
-                tagVals = x.values
+            tagVals = map(str, x.values) if tag == "artwork" else x.values
             val = tuple(sorted(tagVals))
             values.setdefault(val, []).append(file)
         else:
@@ -54,12 +51,12 @@ def collectAndCheck(tag, data):
     return values, missing
 
 
-core_tags = ['genre']
+core_tags = ["genre"]
 core_values = {
-    'genre': {'rock', 'jazz', 'classical', 'blues', 'reggae'}
+    "genre": {"rock", "jazz", "classical", "blues", "reggae"},
 }
 
-collect_tags = ['genre', 'media']
+collect_tags = ["genre", "media"]
 
 def checkCoreValues(tag_values, coreVals: set[str]):
     missing_core = []
@@ -80,11 +77,8 @@ def getValues(tag, data):
 def splitByDisk(data):
     disks = {}
     for i in data:
-        disknum = data[i].get('disknumber')
-        if disknum:
-            num = disknum.first
-        else:
-            num = 0
+        disknum = data[i].get("disknumber")
+        num = disknum.first if disknum else 0
         disks.setdefault(num, {}).update({i: data[i]})
 
     return disks
@@ -94,15 +88,15 @@ def maxKey(details):
 
 def printDetails(details):
     names = {}
-    for v in details.keys():
+    for v in details:
         names[v] = fmtTuple(v) + ": "
     maxLen = max(map(len, (names.values())))
 
     for k, v in details.items():
         lines = pprint.pformat(sorted(v), compact=True, width=120).splitlines()
         report(f"    {names[k]:{maxLen}} {lines[0]}")
-        for l in lines[1:]:
-            print(" " * (maxLen + 4), l)
+        for line in lines[1:]:
+            print(" " * (maxLen + 4), line)
 
 def countline(data, width, header, maxwidth = 120):
     line = header
@@ -121,7 +115,7 @@ def countline(data, width, header, maxwidth = 120):
 
 def printCounts(details: dict[str,collections.Counter]):
     names = {}
-    for v in details.keys():
+    for v in details:
         names[v] = fmtTuple(v) + ": "
     maxLen = max(map(len, (names.values())))
 
@@ -134,8 +128,8 @@ def printCounts(details: dict[str,collections.Counter]):
 
 
 
-album_tags = ['album', 'artist', 'albumartist', 'genre', 'artistsort', 'albumartistsort', 'totaldisks', 'artwork', 'media' ]
-disk_tags =  ['disknumber', 'totaltracks']
+album_tags = ["album", "artist", "albumartist", "genre", "artistsort", "albumartistsort", "totaldisks", "artwork", "media" ]
+disk_tags =  ["disknumber", "totaltracks"]
 
 def checkConsistency(directory, details):
     if not directory.is_dir():
@@ -172,14 +166,14 @@ def checkConsistency(directory, details):
                         counter[subkey] += len(value)
 
         diskdata = splitByDisk(data)
-        numdisks = getValues('totaldisks', data)
+        numdisks = getValues("totaldisks", data)
         if len(numdisks) > 1:
             report(f"Unable to check number of disks.  Inconsistent values: {list(numdisks)}")
         elif numdisks:
             num = numdisks.pop()
             if len(diskdata) != num:
                 report(f"Number of disks listed {num} does not match number of disks {len(diskdata)}")
-                disks = getValues('disknumber', data)
+                disks = getValues("disknumber", data)
                 alldisks = set(range(1, num + 1))
                 report(f"Missing disks: {alldisks - disks}")
 
@@ -196,14 +190,14 @@ def checkConsistency(directory, details):
                         report(f"Missing tag {tag} in all files for disk {disk}")
                     else:
                         report(f"Missing tag {tag} in files for disk {disk} in {missing}")
-            totaltracks = getValues('totaltracks', dData)
+            totaltracks = getValues("totaltracks", dData)
             if len(totaltracks) > 1:
                 report(f"Unable to check number of tracks.  Inconsistent values: {list(totaltracks)}")
             elif totaltracks:
                 num = totaltracks.pop()
                 if len(dData) != num:
                     report(f"Number of tracks listed {num} does not match number of tracks {len(dData)} for disk {disk}")
-                    tracks = getValues('tracknumber', dData)
+                    tracks = getValues("tracknumber", dData)
                     alltracks = set(range(1, num + 1))
                     report(f"Missing tracks: {alltracks - tracks}")
 
@@ -238,12 +232,11 @@ def fmtTuple(x):
 
 @cache
 def quoteComma(x):
-    if ',' in x:
+    if "," in x:
         return f'"{x}"'
     return x
 
 def fmtTuples(x):
-    ic(x)
     return ", ".join(map(fmtTuple, map(quoteComma, x)))
 
 
@@ -261,12 +254,12 @@ def main():
         for i in args.directories:
             checkDir(i, args.details, args.recurse)
 
-        setDir('')
+        setDir("")
 
-        print('')
-        print('-' * 60)
+        print()
+        print("-" * 60)
         print("Summary values")
-        print('-' * 60)
+        print("-" * 60)
         printCounts(tag_counts)
 
     except KeyboardInterrupt:
