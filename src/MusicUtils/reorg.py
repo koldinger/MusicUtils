@@ -32,14 +32,13 @@
 import argparse
 import logging
 import os
-import os.path
-import pathlib
 import shutil
 import sys
 import unicodedata
 from collections import Counter, defaultdict
 from enum import Enum
 from functools import reduce
+from pathlib import Path
 
 import colorlog
 import magic
@@ -66,8 +65,8 @@ bases_default = os.environ.get('REORG_TYPES', '').split()
 base_default = os.environ.get('REORG_BASE', '.')
 
 args : argparse.Namespace = None
-log = None
-bases = None
+log: logging.Logger
+bases: defaultdict
 dirmode = None
 
 def octint(arg:str):
@@ -81,7 +80,7 @@ def processArgs():
 
     parser = argparse.ArgumentParser(description="Reorganize music files", add_help=True)
 
-    parser.add_argument('--base', '-b', type=pathlib.Path, dest='base', default=pathlib.Path(base_default),
+    parser.add_argument('--base', '-b', type=Path, dest='base', default=Path(base_default),
                         help='Base destination directory' + _def)
     parser.add_argument('--types', '-t', dest='split', default=True, action=argparse.BooleanOptionalAction,
                         help='Split by type' + _def)
@@ -145,7 +144,7 @@ def processArgs():
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
                         help='Increase the verbosity')
 
-    parser.add_argument('files', nargs='+', type=pathlib.Path,
+    parser.add_argument('files', nargs='+', type=Path,
                         help='List of files/directories to reorganize')
 
     return parser.parse_args()
@@ -250,7 +249,7 @@ def makeDName(file, tags, dirname=None):
         base = file.parent
     else:
         codec = tags.get('#codec').first.split('.')[0].lower()
-        base = pathlib.Path(bases.get(codec, args.base))
+        base = Path(bases.get(codec, args.base))
         log.debug(f"BaseDir: {base}")
 
         if dirname is None:
@@ -307,7 +306,7 @@ def dragFiles(dragfiles, destdir, length):
             log.log(logging.ACTION, f"{action} {str(file):{length}}\t==>  {dest}")
             doMove(file, dest)
 
-def setGroupMode(dest: pathlib.Path, mode=None):
+def setGroupMode(dest: Path, mode=None):
     if mode is None:
         mode = args.mode
     if mode is not None:
@@ -476,7 +475,7 @@ def reorgDir(directory, recurse):
             if dragfiles:
                 log.info("Removing dragged files: %s", " ".join(dragfiles))
                 if not args.test:
-                    map(pathlib.Path.unlink, dragfiles)
+                    map(Path.unlink, dragfiles)
             if not any(directory.iterdir()):
                 log.info("Removing empty directory %s", directory)
                 if not args.test:
@@ -533,11 +532,11 @@ def main():
 
     if args.split:
         # Create a dict of {codec: path, ...} from array [codec=path, codec=path, ...]
-        #bases = dict(map(lambda y: [y[0].lower(), pathlib.Path(y[1])], map(lambda x: x.split("="), args.bases)))
-        for t, p in map(lambda y: [y[0].lower(), pathlib.Path(y[1])], map(lambda x: x.split("="), args.bases)):
-            if not p.is_absolute():
-                p = args.base.joinpath(p)
-            bases[t] = p
+        #bases = dict(map(lambda y: [y[0].lower(), Path(y[1])], map(lambda x: x.split("="), args.bases)))
+        #for t, p in map(lambda y: [y[0].lower(), Path(y[1])], map(lambda x: x.split("="), args.bases)):
+        for t, p in ([y[0].lower(), Path(y[1])] for y in (x.split("=") for x in args.bases)):
+            base_path = p if p.is_absolute() else args.base.joinpath(p)
+            bases[t] = base_path
 
     maxLength = longestName(args.files)
 
