@@ -121,24 +121,24 @@ def parseArgs():
                             formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
     setGroup.add_argument("--tags", "-t",     default=[], dest="tags", type=TagArgument, action="append", nargs="+", help="List of tags to apply.  Ex: --tags 'artist=The Beatles' 'album=Abbey Road'")
-    setGroup.add_argument("--delete", "-d",   type=checkTag,  action="append", nargs="+", metavar="TAG", help="List of tags to delete.   Ex: --delete artist artistsort")
-    setGroup.add_argument("--append", "-a",   type=bool, action=BooleanOptionalAction, default=False, help="Add values to current tag")
-    setGroup.add_argument("--clear", "-C",    type=bool, action=BooleanOptionalAction, default=False, help="Remove all tags")
-    setGroup.add_argument("--empty", "-e",    type=bool, action=BooleanOptionalAction, default=False, help="Remove empty tags")
+    setGroup.add_argument("--delete", "-d",   type=TagArgument,  action="append", nargs="+", metavar="TAG", help="List of tags to delete.   Ex: --delete artist artistsort")
+    setGroup.add_argument("--append", "-a",   action=BooleanOptionalAction, default=False, help="Add values to current tag")
+    setGroup.add_argument("--clear", "-C",    action=BooleanOptionalAction, default=False, help="Remove all tags")
+    setGroup.add_argument("--empty", "-e",    action=BooleanOptionalAction, default=False, help="Remove empty tags")
     setGroup.add_argument("--split",          type=checkTagAll, nargs="*", action="append", metavar="TAG", default=None, help="List of tags to apply splitting to")
     setGroup.add_argument("--splitchars",     type=str,  default=";/", help="List of characters to use to split tags")
-    setGroup.add_argument("--preserve", "-p", type=bool, action=BooleanOptionalAction, default=False, help="Preserve timestamps")
+    setGroup.add_argument("--preserve", "-p", action=BooleanOptionalAction, default=False, help="Preserve timestamps")
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action="append", nargs="*", metavar="TAG", default=None, help="Print current tags (no changes made)")
-    printGroup.add_argument("--details", "-D",  type=bool, action=BooleanOptionalAction, default=False, help="Print tags, including read-only encoding details (starts with #)")
-    printGroup.add_argument("--all", "-A",      type=bool, action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
-    printGroup.add_argument("--lists", "-L",    type=bool, action=BooleanOptionalAction, default=True, help="Print list values separately")
+    printGroup.add_argument("--details", "-D",  action=BooleanOptionalAction, default=False, help="Print tags, including read-only encoding details (starts with #)")
+    printGroup.add_argument("--all", "-A",      action=BooleanOptionalAction, default=False, help="Print all tags, regardless of whether they contain any data")
+    printGroup.add_argument("--lists", "-L",    action=BooleanOptionalAction, default=True, help="Print list values separately")
     printGroup.add_argument("--value", "-V",    type=TagArgument, action="append", nargs="+", metavar="TAG=Value", default=[], help="Print only if the tag matches (value is a regular expression)")
-    printGroup.add_argument("--ignorecase", "-I", type=bool, action=BooleanOptionalAction, default=False, help="Ignore case on comparisons")
-    printGroup.add_argument("--names", "-N",    type=bool, action=BooleanOptionalAction, default=False, help="Only list file names that match")
-    printGroup.add_argument("--filename",       type=bool, action=BooleanOptionalAction, default=True, help="Print filename")
-    printGroup.add_argument("--tagname",        type=bool, action=BooleanOptionalAction, default=True, help="Print tag name")
+    printGroup.add_argument("--ignorecase", "-I", action=BooleanOptionalAction, default=False, help="Ignore case on comparisons")
+    printGroup.add_argument("--names", "-N",    action=BooleanOptionalAction, default=False, help="Only list file names that match")
+    printGroup.add_argument("--filename",       action=BooleanOptionalAction, default=True, help="Print filename")
+    printGroup.add_argument("--tagname",        action=BooleanOptionalAction, default=True, help="Print tag name")
 
     artGroup = parser.add_argument_group("Artwork Extraction Options")
     artGroup.add_argument("--extract", "-E",  type=int, nargs="?", default=None, const=1, help="Extract the Nth picture.   No args = 1st picture")
@@ -154,11 +154,11 @@ def parseArgs():
 
     pathGroup = saveGroup.add_mutually_exclusive_group()
     pathGroup.add_argument("--relative", "-R", type=pathlib.Path, default=".", help="Print paths relative to this directory")
-    pathGroup.add_argument("--fullpath",       type=bool, action=BooleanOptionalAction, default=False, help="Use full paths")
+    pathGroup.add_argument("--fullpath",       action=BooleanOptionalAction, default=False, help="Use full paths")
 
-    parser.add_argument("--dryrun", "-n",   type=bool, action=BooleanOptionalAction, default=False, help="Don't save, dry run")
-    parser.add_argument("--stats", "-s",    type=bool, action=BooleanOptionalAction, default=False, help="Print stats")
-    parser.add_argument("--quiet", "-q",    type=bool, action=BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
+    parser.add_argument("--dryrun", "-n",   action=BooleanOptionalAction, default=False, help="Don't save, dry run")
+    parser.add_argument("--stats", "-s",    action=BooleanOptionalAction, default=False, help="Print stats")
+    parser.add_argument("--quiet", "-q",    action=BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
 
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:
@@ -221,6 +221,8 @@ def checkFile(file):
         if file.is_dir():
             print(f"{colored('Error: ', 'red')} {file} is a directory")
             return False
+        if not file.exists():
+            raise FileNotFoundError(file)
         if not (file.is_file() and isAudio(file)):
             print(f"{colored('Error: ', 'red')} {file} isn't an audio file")
             return False
@@ -367,6 +369,7 @@ orderedTags = {
     "tracknumber": "03",
     "discnumber": "03",
     "discsubtitle": "04",
+    "genre": "05",
     }
 
 def tagKey(key):

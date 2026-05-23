@@ -47,11 +47,11 @@ ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith("#") and x.uppe
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Edit the tags in a collect of files")
-    parser.add_argument("--replace", "-r", type=bool, action=argparse.BooleanOptionalAction, default=True,
+    parser.add_argument("--replace", "-r", action=argparse.BooleanOptionalAction, default=True,
                         help="Replace existing tags in destination")
-    parser.add_argument("--delete", "-d", type=bool, action=argparse.BooleanOptionalAction, default=True,
+    parser.add_argument("--delete", "-d", action=argparse.BooleanOptionalAction, default=True,
                         help="Delete tags from destination that don't exist in source")
-    parser.add_argument("--preserve", "-p", type=bool, action=argparse.BooleanOptionalAction, default=False,
+    parser.add_argument("--preserve", "-p", action=argparse.BooleanOptionalAction, default=False,
                         help="Preserve timestamps")
     parser.add_argument("--save", "-s", type=argparse.FileType("w"), default=None, help="Save the generated tag data to a file")
     parser.add_argument("--load", "-l", type=argparse.FileType("r"), default=None, help="Load the generated tag data from a file")
