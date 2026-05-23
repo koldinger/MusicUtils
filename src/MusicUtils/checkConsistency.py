@@ -51,9 +51,8 @@ def collectAndCheck(tag, data):
     return values, missing
 
 
-core_tags = ["genre"]
 core_values = {
-    "genre": {"rock", "jazz", "classical", "blues", "reggae"},
+    "genre": {"rock", "jazz", "classical", "blues", "reggae", "country", "pop", "folk", "cajun"},
 }
 
 collect_tags = ["genre", "media"]
@@ -153,7 +152,7 @@ def checkConsistency(directory, details):
                 else:
                     report(f"Missing tag {tag} in files in {pprint.pformat(sorted(missing), compact=True)}")
 
-            if tag in core_tags:
+            if tag in core_values:
                 missing = checkCoreValues(tagVals, core_values[tag])
                 if missing:
                     missing_core[(tag,)] = missing
