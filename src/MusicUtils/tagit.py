@@ -54,6 +54,7 @@ from PIL import Image
 from termcolor import colored, cprint
 
 from .Utils import isAudio
+from . import __version__
 
 # Extract the list of valid tags from the music_tag module.
 ALL_TAGS = sorted(music_tag.tags())
@@ -159,6 +160,8 @@ def parseArgs():
     parser.add_argument("--dryrun", "-n",   action=BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--stats", "-s",    action=BooleanOptionalAction, default=False, help="Print stats")
     parser.add_argument("--quiet", "-q",    action=BooleanOptionalAction, default=False, help="Run quietly (except for print and stats)")
+
+    parser.add_argument("--version", action="version", version=__version__, help="Print the version")
 
     group = parser.add_argument_group("Tags")
     for arg in VALID_TAGS:

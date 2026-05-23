@@ -46,6 +46,8 @@ import music_tag
 import regex as re
 import unidecode
 
+from . import __version__
+
 # import pysnooper
 
 # from icecream import ic
@@ -143,6 +145,9 @@ def processArgs():
                         help="Ignore non-audio files")
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
                         help='Increase the verbosity')
+
+    parser.add_argument("--version", action="version", version=__version__, help="Print the version")
+
 
     parser.add_argument('files', nargs='+', type=Path,
                         help='List of files/directories to reorganize')

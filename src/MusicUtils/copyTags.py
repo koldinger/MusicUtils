@@ -40,6 +40,7 @@ from termcolor import colored
 
 from MusicUtils.Utils import isAudio
 
+from . import __version__
 
 class PrintOnce:
     def __init__(self, message):
@@ -275,6 +276,9 @@ def parseArgs():
     parser.add_argument("--dryrun", "-n",   type=bool, action=argparse.BooleanOptionalAction, default=False, help="Don't save, dry run")
     parser.add_argument("--recurse", "-R",  type=bool, action=argparse.BooleanOptionalAction, default=False, help="Recurse into subdirectories")
     parser.add_argument("--tags", type=str, nargs="+", default=None, help="Tags to copy")
+
+    parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
+
     parser.add_argument("tagSource", type=Path, nargs=1, help="tagSource")
     parser.add_argument("tagDest", type=Path, nargs=1, help="tagDest")
     return parser.parse_args()

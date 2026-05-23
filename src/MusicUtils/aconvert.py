@@ -45,6 +45,8 @@ from rich.progress import (BarColumn, MofNCompleteColumn, Progress,
                            SpinnerColumn, TaskProgressColumn, TextColumn,
                            TimeRemainingColumn)
 
+from . import __version__
+
 Conversion = namedtuple("Conversion", ["source", "dest", "format", "codec", "bitrate", "resample", "params", "logger", "args"])
 DefParams = namedtuple("DefParams", ["codec", "format", "bitrate", "suffix", "params"])
 
@@ -206,6 +208,8 @@ def processArgs():
     parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
     parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
     parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help='Increase the verbosity')
+
+    parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
 
     parser.add_argument('srcdir',  type=pathlib.Path, help='Root input directory')
     parser.add_argument('destdir', type=pathlib.Path, help='Root output directory')

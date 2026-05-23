@@ -10,6 +10,8 @@ from pathlib import Path
 import magic
 import music_tag
 
+from . import __version__
+
 tag_counts = collections.defaultdict(collections.Counter)
 
 def isAudio(path):
@@ -19,6 +21,9 @@ def parse_args():
     parser = argparse.ArgumentParser("Check music files for consistent tagging")
     parser.add_argument("--recurse", "-R", dest="recurse", default=False, action=argparse.BooleanOptionalAction, help="Recurse through the tree")
     parser.add_argument("--details", "-d", dest="details", default=False, action=argparse.BooleanOptionalAction, help="Print full details of inconsistencies")
+
+    parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
+
     parser.add_argument("directories", type=Path, nargs="+", help="Directories to check")
 
     args = parser.parse_args()

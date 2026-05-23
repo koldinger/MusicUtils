@@ -43,6 +43,8 @@ from termcolor import colored, cprint
 
 from .Utils import addTuples, isAudio
 
+from . import __version__
+
 ALL_TAGS = list(map(str.lower, filter(lambda x: not x.startswith("#") and x.upper() != "ARTWORK", music_tag.tags())))
 
 def parseArgs():
@@ -53,17 +55,20 @@ def parseArgs():
                         help="Delete tags from destination that don't exist in source")
     parser.add_argument("--preserve", "-p", action=argparse.BooleanOptionalAction, default=False,
                         help="Preserve timestamps")
-    parser.add_argument("--save", "-s", type=argparse.FileType("w"), default=None, help="Save the generated tag data to a file")
-    parser.add_argument("--load", "-l", type=argparse.FileType("r"), default=None, help="Load the generated tag data from a file")
+    parser.add_argument("--save", "-s", type=pathlib.Path, default=None, help="Save the generated tag data to a file")
+    parser.add_argument("--load", "-l", type=pathlib.Path, default=None, help="Load the generated tag data from a file")
     parser.add_argument("--edit", "-e", action=argparse.BooleanOptionalAction, default=True, help="Inoke an editor to edit the generated data")
     parser.add_argument("--format", "-f", type=str, choices=["json", "yaml"], default="yaml", help="Format in which to save/load data")
     parser.add_argument("--promote", "-P", action=argparse.BooleanOptionalAction, default=True, help="Promote common elements to the album or disc level")
     parser.add_argument("--confirm", "-C", action=argparse.BooleanOptionalAction, default=True, help="Confirm writing of files")
     parser.add_argument("--dryrun", "-n", action=argparse.BooleanOptionalAction, default=False, help="Inoke an editor to edit the generated data")
     parser.add_argument("--editor", "-E", type=str, default=os.environ.get("EDITOR", "nano"), help="Editor to use")
+    parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
     parser.add_argument(type=pathlib.Path, nargs="+", dest="files", help="Files to change")
 
     return parser.parse_args()
+
+
 
 
 def checkFile(file):
@@ -325,19 +330,21 @@ def setTags(newData, currentData, replace, delete):
         print(f"Changed: {pprint.pformat(sorted(fChanged), compact=True)}")
     return fChanged
 
-def saveTags(tags, file, format):
-    match format:
-        case "json":
-            json.dump(tags, file, indent=4)
-        case "yaml":
-            file.write(yaml.dump(tags, allow_unicode=True))
+def saveTags(tags, fpath: pathlib.Path, format):
+    with fpath.open("w") as file:
+        match format:
+            case "json":
+                json.dump(tags, file, indent=4)
+            case "yaml":
+                file.write(yaml.dump(tags, allow_unicode=True))
 
-def loadTags(file, fmt):
-    match fmt:
-        case "json":
-            return json.load(file)
-        case "yaml":
-            return yaml.load(file, yaml.SafeLoader)
+def loadTags(fpath: pathlib.Path, fmt):
+    with fpath.open("r") as file:
+        match fmt:
+            case "json":
+                return json.load(file)
+            case "yaml":
+                return yaml.load(file, yaml.SafeLoader)
 
 def confirm(prompt, default="y"):
     while True:

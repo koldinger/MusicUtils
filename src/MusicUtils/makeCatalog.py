@@ -13,6 +13,8 @@ import unicodedata
 
 from pymediainfo import MediaInfo
 
+from . import __version__
+
 
 class NotAudioException(Exception):
     pass
@@ -42,6 +44,9 @@ def parseArgs():
     #parser.add_argument('--test', '-t', metavar="(-100 to 100)", choices=range(-100, 100), help="Test")
     parser.add_argument('--save', '-S', dest='save', help='Save the database to a CSV file')
     parser.add_argument('--load', '-L', dest='load', help='Preload the database from a CSV file before parsing other files')
+
+    parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
+
     parser.add_argument('dirs', nargs="*", type=pathlib.Path, help='Base directories to catalog')
     args = parser.parse_args()
     return args
