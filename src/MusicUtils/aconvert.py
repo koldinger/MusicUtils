@@ -197,7 +197,7 @@ def processArgs():
     parser.add_argument('--format', '-f', dest='format', default=None,  help="Output Format" + _def)
     parser.add_argument('--bitrate', '-b', dest='bitrate', type=str, default=None, help='Output bitrate' + _def)
     parser.add_argument('--codec', '-c', dest='codec', type=str, default=None, help='Codec to use' + _def)
-    parser.add_argument('--cd', '-C', dest='cd', type=bool, default=False, action=argparse.BooleanOptionalAction, help="Convert to CD resolution" + _def)
+    parser.add_argument('--cd', '-C', dest='cd', default=False, action=argparse.BooleanOptionalAction, help="Convert to CD resolution" + _def)
     parser.add_argument('--suffix', '-s', dest='suffix', type=str, default=None, help='Suffix to use')
     parser.add_argument('--copytags', '-t', dest='copytags', action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
     parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
