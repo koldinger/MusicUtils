@@ -47,6 +47,7 @@ from functools import lru_cache, partial
 from hashlib import md5
 
 import magic
+import imgcat
 import music_tag
 import requests
 import yaml
@@ -542,7 +543,11 @@ def main():
             cprint(f"Invalid image number {args.extract}.   File contains {len(data['ARTWORK'])} images", "red", file=sys.stderr)
             sys.exit(1)
         art = data["artwork"].values[args.extract - 1]
-        args.output.write(art.data)
+
+        if args.output.isatty():
+            imgcat.imgcat(art.data)
+        else:
+            args.output.write(art.data)
 
     elif args.clear:
         # clear all the tags.
