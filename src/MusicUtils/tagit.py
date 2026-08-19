@@ -441,7 +441,7 @@ def saveTags(file, tagData, fullpath, relative):
     if fullpath:
         file = file.absolute()
     elif relative:
-        with contextlib.supress(ValueError):
+        with contextlib.suppress(ValueError):
             file = file.absolute().relative_to(relative.absolute())
 
     data = {}
@@ -481,7 +481,7 @@ def makeRegEx(values, ignorecase=False):
             errors = True
 
     if errors:
-        raise ValueError(f"Invalid value expression: {values}", file=sys.stderr)
+        raise ValueError(f"Invalid value expression: {values}")
     return checks
 
 def checkTagRegEx(data, tag, regex):
