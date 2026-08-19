@@ -63,8 +63,8 @@ class Action(Enum):
     ACTION_COPY=3
     ACTION_SYMLINK=4
 
-bases_default = os.environ.get('REORG_TYPES', '').split()
-base_default = os.environ.get('REORG_BASE', '.')
+bases_default = os.environ.get("REORG_TYPES", "").split()
+base_default = os.environ.get("REORG_BASE", ".")
 
 args : argparse.Namespace = None
 log: logging.Logger
@@ -78,79 +78,79 @@ def octint(arg:str):
     return val
 
 def processArgs():
-    _def = ' (default: %(default)s)'
+    _def = " (default: %(default)s)"
 
     parser = argparse.ArgumentParser(description="Reorganize music files", add_help=True)
 
-    parser.add_argument('--base', '-b', type=Path, dest='base', default=Path(base_default),
-                        help='Base destination directory' + _def)
-    parser.add_argument('--types', '-t', dest='split', default=True, action=argparse.BooleanOptionalAction,
-                        help='Split by type' + _def)
-    parser.add_argument('--typebase', '-B', dest='bases', default=bases_default, nargs='*',
-                        help='Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3')
+    parser.add_argument("--base", "-b", type=Path, dest="base", default=Path(base_default),
+                        help="Base destination directory" + _def)
+    parser.add_argument("--types", "-t", dest="split", default=True, action=argparse.BooleanOptionalAction,
+                        help="Split by type" + _def)
+    parser.add_argument("--typebase", "-B", dest="bases", default=bases_default, nargs="*",
+                        help="Bases for each type.   Ex: flac=/music/flac mp3=/music/mp3")
 
     action = parser.add_mutually_exclusive_group()
-    action.add_argument('--move', dest='action', action='store_const', default=Action.ACTION_MOVE, const=Action.ACTION_MOVE,
-                        help='Move (rename) the files')
-    action.add_argument('--link', dest='action', action='store_const', const=Action.ACTION_LINK,
-                        help='Hard link the files')
-    action.add_argument('--copy', dest='action', action='store_const', const=Action.ACTION_COPY,
-                        help='Copy the files')
-    action.add_argument('--symlink', '--softlink', dest='action', action='store_const', const=Action.ACTION_SYMLINK,
-                        help='Symbolic link the files')
+    action.add_argument("--move", dest="action", action="store_const", default=Action.ACTION_MOVE, const=Action.ACTION_MOVE,
+                        help="Move (rename) the files")
+    action.add_argument("--link", dest="action", action="store_const", const=Action.ACTION_LINK,
+                        help="Hard link the files")
+    action.add_argument("--copy", dest="action", action="store_const", const=Action.ACTION_COPY,
+                        help="Copy the files")
+    action.add_argument("--symlink", "--softlink", dest="action", action="store_const", const=Action.ACTION_SYMLINK,
+                        help="Symbolic link the files")
 
-    parser.add_argument('--force', '-f', default=False, dest='force', action=argparse.BooleanOptionalAction,
-                        help='Overwrite any existing file')
+    parser.add_argument("--force", "-f", default=False, dest="force", action=argparse.BooleanOptionalAction,
+                        help="Overwrite any existing file")
 
-    parser.add_argument("--owner", "-o", dest='owner', default=None, help="Set file owner, uid or name")
-    parser.add_argument("--group", "-g", dest='group', default=None, help="Set file group, gid or name")
-    parser.add_argument("--mode", "-m", dest='mode', type=octint, default=None, help="Set file mode, in octal")
+    parser.add_argument("--owner", "-o", dest="owner", default=None, help="Set file owner, uid or name")
+    parser.add_argument("--group", "-g", dest="group", default=None, help="Set file group, gid or name")
+    parser.add_argument("--mode", "-m", dest="mode", type=octint, default=None, help="Set file mode, in octal")
 
-    parser.add_argument('--recurse', default=True, dest='recurse', action=argparse.BooleanOptionalAction,
-                        help='Recurse into directories' + _def)
-    parser.add_argument('--dry-run', '-n', dest='test', default=False, action=argparse.BooleanOptionalAction,
-                        help='Rename files.  If false, only')
-    parser.add_argument('--drag', '-d', dest='drag', nargs='*', default=['cover.jpg'],
-                        help='List of files to copy along with the music files' + _def)
+    parser.add_argument("--recurse", default=True, dest="recurse", action=argparse.BooleanOptionalAction,
+                        help="Recurse into directories" + _def)
+    parser.add_argument("--dry-run", "-n", dest="test", default=False, action=argparse.BooleanOptionalAction,
+                        help="Rename files.  If false, only")
+    parser.add_argument("--drag", "-d", dest="drag", nargs="*", default=["cover.jpg"],
+                        help="List of files to copy along with the music files" + _def)
 
-    parser.add_argument('--ascii', '-A', dest='ascii', default=False, action=argparse.BooleanOptionalAction,
-                        help='Convert to ASCII characters')
-    parser.add_argument('--normalize', '-N', dest='normalize', default=True, action=argparse.BooleanOptionalAction,
-                        help='Normalize Unicode Strings')
-    parser.add_argument('--inplace', '-i', dest='inplace', default=False, action=argparse.BooleanOptionalAction,
-                        help='Rename files inplace')
-    parser.add_argument('--albartist', '-a', dest='albartist', default=True, action=argparse.BooleanOptionalAction,
-                        help='Use album artist for default directory if available' + _def)
-    parser.add_argument('--discnum', '-D', dest='alwaysdisc', default=False, action=argparse.BooleanOptionalAction,
-                        help='Always use the disknumber in file names' + _def)
-    parser.add_argument('--various', '-V', dest='various', default="VariousArtists",
+    parser.add_argument("--ascii", "-A", dest="ascii", default=False, action=argparse.BooleanOptionalAction,
+                        help="Convert to ASCII characters")
+    parser.add_argument("--normalize", "-N", dest="normalize", default=True, action=argparse.BooleanOptionalAction,
+                        help="Normalize Unicode Strings")
+    parser.add_argument("--inplace", "-i", dest="inplace", default=False, action=argparse.BooleanOptionalAction,
+                        help="Rename files inplace")
+    parser.add_argument("--albartist", "-a", dest="albartist", default=True, action=argparse.BooleanOptionalAction,
+                        help="Use album artist for default directory if available" + _def)
+    parser.add_argument("--discnum", "-D", dest="alwaysdisc", default=False, action=argparse.BooleanOptionalAction,
+                        help="Always use the disknumber in file names" + _def)
+    parser.add_argument("--various", "-V", dest="various", default="VariousArtists",
                         help='"Artist" name for various artists collections' + _def)
-    parser.add_argument('--the', '-T', dest='useArticle', default=True, action=argparse.BooleanOptionalAction,
-                        help='Use articles')
-    parser.add_argument('--classical', '-C', dest='classical', default=False, action=argparse.BooleanOptionalAction,
-                        help='Use classical naming')
-    parser.add_argument('--surname', '-S', dest='surname', default=False, action=argparse.BooleanOptionalAction,
-                        help='Use the sorted name (ie, surname) of the composer if available' + _def)
-    parser.add_argument('--length', dest='maxlength', default=75, type=int,
-                        help='Maximum length of file names' + _def)
-    parser.add_argument('--clean', '-c', dest='cleanup', default=False, action=argparse.BooleanOptionalAction,
-                        help='Cleanup empty directories and dragged files when done' + _def)
-    parser.add_argument('--ignore-case', '-I', dest='ignorecase', default=False,  action=argparse.BooleanOptionalAction,
-                        help='Ignore case when determining if target exists' + _def)
+    parser.add_argument("--the", "-T", dest="useArticle", default=True, action=argparse.BooleanOptionalAction,
+                        help="Use articles")
+    parser.add_argument("--classical", "-C", dest="classical", default=False, action=argparse.BooleanOptionalAction,
+                        help="Use classical naming")
+    parser.add_argument("--surname", "-S", dest="surname", default=False, action=argparse.BooleanOptionalAction,
+                        help="Use the sorted name (ie, surname) of the composer if available" + _def)
+    parser.add_argument("--length", dest="maxlength", default=75, type=int,
+                        help="Maximum length of file names" + _def)
+    parser.add_argument("--clean", "-c", dest="cleanup", default=False, action=argparse.BooleanOptionalAction,
+                        help="Cleanup empty directories and dragged files when done" + _def)
+    parser.add_argument("--ignore-case", "-I", dest="ignorecase", default=False,  action=argparse.BooleanOptionalAction,
+                        help="Ignore case when determining if target exists" + _def)
 
-    parser.add_argument('--unknown', dest='unknown', default=True, action=argparse.BooleanOptionalAction,
+    parser.add_argument("--unknown", dest="unknown", default=True, action=argparse.BooleanOptionalAction,
                         help="Ignore 'unknown' files without artist or album info")
 
-    parser.add_argument('--warn-non-audio', dest='warnNonAudio', default=False, action=argparse.BooleanOptionalAction,
+    parser.add_argument("--warn-non-audio", dest="warnNonAudio", default=False, action=argparse.BooleanOptionalAction,
                         help="Ignore non-audio files")
-    parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0,
-                        help='Increase the verbosity')
+    parser.add_argument("--verbose", "-v", dest="verbose", action="count", default=0,
+                        help="Increase the verbosity")
 
     parser.add_argument("--version", action="version", version=__version__, help="Print the version")
 
 
-    parser.add_argument('files', nargs='+', type=Path,
-                        help='List of files/directories to reorganize')
+    parser.add_argument("files", nargs="+", type=Path,
+                        help="List of files/directories to reorganize")
 
     return parser.parse_args()
 
@@ -159,7 +159,7 @@ def munge(name):
     if name is None:
         name = ""
     if args.normalize:
-        name = unicodedata.normalize('NFKC', name)
+        name = unicodedata.normalize("NFKC", name)
     if args.ascii:
         name = unidecode.unidecode(name)
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~\p{P}]', '', name)
@@ -167,17 +167,17 @@ def munge(name):
     #name = re.sub(r'[/&\.\[\]\$\"\'\?\(\)\<\>\!\:\;\~]', '', name)
 
     # Remove all punctuation, except -,_
-    name = re.sub(r'[^\P{Punct}-,_]', '', name)
+    name = re.sub(r"[^\P{Punct}-,_]", "", name)
     # Remove all control characters (what the f**k are these doing in a name anyhow?)
-    name = re.sub(r'[\p{Cntrl}]', '', name)
+    name = re.sub(r"[\p{Cntrl}]", "", name)
     # Convert all spaces to underscores
-    name = re.sub(r'\s', '_', name)
+    name = re.sub(r"\s", "_", name)
     # Convert multiple underscores to a single underscore
-    name = re.sub(r'_+', '_', name)
+    name = re.sub(r"_+", "_", name)
     # Re
     if not args.useArticle:
         name = re.sub(r"^(The|A|An)\s+", "", name)
-    name = name.strip('_')
+    name = name.strip("_")
     return name
 
 
@@ -187,32 +187,33 @@ def longestName(files):
     return 0
 
 def noSlash(tag):
-    if tag.find('/') != -1:
-        tag = tag[0:tag.find('/')]
+    if tag.find("/") != -1:
+        tag = tag[0:tag.find("/")]
     return tag
 
 def makeFName(file, tags):
     name = ""
-    diskno = tags.get('discnumber').first
-    totaldiscs = tags.get('totaldiscs').first
+    diskno = tags.get("discnumber").first
+    totaldiscs = tags.get("totaldiscs").first
 
-    title = tags.get('tracktitle').first
+    title = tags.get("tracktitle").first
     if title is None:
         if not args.unknown:
             return None
-        title = 'Unknown'
+        title = "Unknown"
 
-    if 'subtitle' in tags:
-        title = title + " " + tags.get('subtitle').first
+    if "subtitle" in tags:
+        title = title + " " + tags.get("subtitle").first
     #elif 'part' in tags:
     #    title = title + " " + str(tags.get('part'))
 
-    if 'tracknumber' in tags:
-        track = str(tags.get('tracknumber'))
+    if "tracknumber" in tags:
+        track = str(tags.get("tracknumber"))
     else:
-        track = '0'
+        track = "0"
 
-    if diskno is not None and (args.alwaysdisc or  totaldiscs and totaldiscs > 1):
+    ic(diskno, track, totaldiscs)
+    if diskno is not None and (args.alwaysdisc or  (totaldiscs and totaldiscs > 1)):
         trk = f"{diskno}-{track.zfill(2)}"
     else:
         trk = noSlash(track).zfill(2)
@@ -238,40 +239,40 @@ def makeComposerString(composers, maxcomps=3):
         if len(listed) > 1:
             string = "_&_".join([string, listed[-1]])
         if len(unique) > maxcomps:
-            string += '_et_al'
+            string += "_et_al"
     else:
         string = listed[0]
 
     return string
 
 def getArtist(tags):
-    artist = tags.get('artist').first
+    artist = tags.get("artist").first
     log.debug(f"Retrieved artist: {artist}")
     return artist
 
-def makeDName(file, tags, dirname=None):
+def makeDName(file, tags, dirname=None) -> Path:
     if args.inplace:
         base = file.parent
     else:
-        codec = tags.get('#codec').first.split('.')[0].lower()
+        codec = tags.get("#codec").first.split(".")[0].lower()
         base = Path(bases.get(codec, args.base))
         log.debug(f"BaseDir: {base}")
 
         if dirname is None:
-            compilation = str(tags.get('compilation')).lower()
-            if compilation in ['yes', '1', 'true']:
+            compilation = str(tags.get("compilation")).lower()
+            if compilation in ["yes", "1", "true"]:
                 dirname = args.various
-            elif args.albartist and tags.get('albumartist'):
-                dirname = tags.get('albumartist').first
+            elif args.albartist and tags.get("albumartist"):
+                dirname = tags.get("albumartist").first
             else:
                 dirname = getArtist(tags)
             dirname = munge(dirname)
 
-        album = tags.get('album').first
+        album = tags.get("album").first
         if not album:
             if not args.unknown:
                 return None
-            album = 'Unknown'
+            album = "Unknown"
 
         base = base.joinpath(dirname, munge(album))
 
@@ -280,7 +281,7 @@ def makeDName(file, tags, dirname=None):
 
 
 def isAudio(file):
-    return magic.from_buffer(open(file, 'rb').read(2048), mime=True).startswith("audio")
+    return magic.from_buffer(open(file, "rb").read(2048), mime=True).startswith("audio")
 
 def getTags(file):
     log.debug(f"Getting tags from file {file}")
@@ -288,15 +289,16 @@ def getTags(file):
         raise NotAudioException(f"{file.resolve()} is not an audio file")
     try:
         tags = music_tag.load_file(file)
-        return tags
+        ic(tags)
     except NotImplementedError as exc:
         log.warning(f"Could not retrieve tags from {file}: {exc}")
         raise NotAudioException(file.resolve()) from exc
+    return tags
 
 def makeName(file, tags, dirname = None):
-    dirname = makeDName(file, tags, dirname)
+    dname = makeDName(file, tags, dirname)
 
-    newFile = dirname.joinpath(makeFName(file, tags))
+    newFile = dname.joinpath(makeFName(file, tags))
 
     log.debug(f"FullName {file} -> {newFile}")
     return newFile
@@ -308,7 +310,7 @@ def dragFiles(dragfiles, destdir, length):
     for file in dragfiles:
         dest = destdir.joinpath(file.name)
         if file.exists() and not dest.exists():
-            log.log(logging.ACTION, f"{action} {str(file):{length}}\t==>  {dest}")
+            log.log(logging.ACTION, f"{action} {file!s:{length}}\t==>  {dest}")
             doMove(file, dest)
 
 def setGroupMode(dest: Path, mode=None):
@@ -388,7 +390,7 @@ def renameFile(file, tags, dirname=None, length=0):
             return dest
 
 
-        log.log(logging.ACTION, f"{action} {str(file):{length}s} \t==>  {dest}")
+        log.log(logging.ACTION, f"{action} {file!s:{length}s} \t==>  {dest}")
 
         doMove(file, dest)
 
@@ -400,7 +402,7 @@ def renameFile(file, tags, dirname=None, length=0):
     except AttributeError as exc:
         log.warning(exc)
         return None
-    except FileExistsError as exc:
+    except FileExistsError:
         log.warning(f"Destination file {dest} exists.  Cannot move")
         return dest
     except Exception as exc:
@@ -415,12 +417,12 @@ def isDraggable(file):
     return False
 
 def classicalArtist(tags):
-    if tags.get('composersort') and args.surname:
-        return tags.get('composersort').first
-    if tags.get('composer'):
-        return tags.get('composer').first
-    if tags.get('artist'):
-        return tags.get('artist').first
+    if tags.get("composersort") and args.surname:
+        return tags.get("composersort").first
+    if tags.get("composer"):
+        return tags.get("composer").first
+    if tags.get("artist"):
+        return tags.get("artist").first
     return None
 
 def reorgDir(directory, recurse):
@@ -431,7 +433,7 @@ def reorgDir(directory, recurse):
         composers = set()
         dragfiles = []
         destdirs = Counter()
-        files = sorted(filter(lambda x: not x.name.startswith('.'), list(directory.iterdir())))
+        files = sorted(filter(lambda x: not x.name.startswith("."), list(directory.iterdir())))
         maxLen = longestName(files)
 
         composerStr = None
@@ -463,7 +465,7 @@ def reorgDir(directory, recurse):
         for finfo in audio:
             dest = renameFile(finfo[0], finfo[1], dirname=composerStr, length=maxLen)
             if dest:
-                if not dest.parent in destdirs:
+                if dest.parent not in destdirs:
                     dragFiles(dragfiles, dest.parent, maxLen)
                 destdirs[dest.parent] += 1
 
@@ -494,26 +496,26 @@ def reorgDir(directory, recurse):
 def initLogging():
     # Create a custom logging attachment
     logging.ACTION = logging.INFO + 1
-    logging.addLevelName(logging.ACTION, 'ACTION')
+    logging.addLevelName(logging.ACTION, "ACTION")
 
     handler = colorlog.StreamHandler()
     colors={
-        'DEBUG':    'cyan',
-        'INFO':     'green',
-        'ACTION':   'cyan,bold',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
-        'CRITICAL': 'red,bg_white',
+        "DEBUG":    "cyan",
+        "INFO":     "green",
+        "ACTION":   "cyan,bold",
+        "WARNING":  "yellow",
+        "ERROR":    "red",
+        "CRITICAL": "red,bg_white",
     }
 
-    formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(reset)s %(message)s',
+    formatter = colorlog.ColoredFormatter("%(log_color)s%(levelname)s:%(reset)s %(message)s",
                                           log_colors=colors)
     handler.setFormatter(formatter)
 
-    levels = [logging.WARN, logging.ACTION, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.WARNING, logging.ACTION, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, args.verbose)]  # capped to number of levels
 
-    logger = colorlog.getLogger('reorg')
+    logger = colorlog.getLogger("reorg")
     logger.addHandler(handler)
     logger.setLevel(level)
 
