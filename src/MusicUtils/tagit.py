@@ -57,6 +57,8 @@ from termcolor import colored, cprint
 from .Utils import isAudio
 from . import __version__
 
+from icecream import ic
+
 # Extract the list of valid tags from the music_tag module.
 ALL_TAGS = sorted(music_tag.tags())
 VALID_TAGS = sorted([i for i in map(str.upper, ALL_TAGS) if not i.startswith("#")])
@@ -130,6 +132,7 @@ def parseArgs():
     setGroup.add_argument("--split",          type=checkTagAll, nargs="*", action="append", metavar="TAG", default=None, help="List of tags to apply splitting to")
     setGroup.add_argument("--splitchars",     type=str,  default=";/", help="List of characters to use to split tags")
     setGroup.add_argument("--preserve", "-p", action=BooleanOptionalAction, default=False, help="Preserve timestamps")
+    setGroup.add_argument("--backup", "-B", action=BooleanOptionalAction, default=False, help="Save a backup of each file")
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action="append", nargs="*", metavar="TAG", default=None, help="Print current tags (no changes made)")
@@ -238,7 +241,7 @@ def checkFile(file):
 
 stats = { "processed": 0, "updated"  : 0, "added"    : 0, "changed"  : 0, "deleted"  : 0, "split": 0 }
 
-def processFile(file, tags, splits, delete, preserve, append, empty, splitchars, dryrun):
+def processFile(file, tags, splits, delete, preserve, append, empty, splitchars, dryrun, backup):
     """
     Process a file, changing the tags appropriately.
 
@@ -329,9 +332,9 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
 
     if delete:
         for tag in delete:
-            if tag in data:
-                qprint(f"    Removing tag {tag}")
-                data.remove_tag(tag)
+            if tag.tag in data:
+                qprint(f"    Removing tag {tag.tag}")
+                data.remove_tag(tag.tag)
                 updated = True
                 stats["deleted"] += 1
 
@@ -346,6 +349,8 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
     if updated:
         stats["updated"] += 1
     if not dryrun and updated:
+        if backup:
+            backupFile(file)
         data.save()
         if preserve:
             os.utime(file, times=(times.st_atime, times.st_mtime))
@@ -497,9 +502,9 @@ def checkTagsRegEx(file, checks, andOp=True):
     data = loadTags(file)
 
     if andOp:
-        return all([checkTagRegEx(data, x[0], x[1]) for x in  checks])
+        return all(checkTagRegEx(data, x[0], x[1]) for x in  checks)
 
-    return any([checkTagRegEx(data, x[0], x[1]) for x in checks])
+    return any(checkTagRegEx(data, x[0], x[1]) for x in checks)
 
 
 def main():
@@ -556,6 +561,7 @@ def main():
 
     else:
         # Else we're setting tags.
+
         tags   = makeTagValues(flatten(args.tags))
         splits = flatten(args.split)
         if args.split and (not splits or "ALL" in splits):
@@ -564,7 +570,7 @@ def main():
         delete = flatten(args.delete)
 
         for file in files:
-            data = processFile(file, tags, splits, delete, args.preserve, args.append, args.empty, args.splitchars, args.dryrun)
+            data = processFile(file, tags, splits, delete, args.preserve, args.append, args.empty, args.splitchars, args.dryrun, args.backup)
             if args.save and data:
                 saveTags(file, data, args.fullpath, args.relative)
 
