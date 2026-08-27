@@ -1,17 +1,25 @@
+asttokens==3.0.2
+certifi==2026.7.22
+charset-normalizer==3.5.1
+colorama==0.4.6
 colorlog==6.12.0
+executing==2.2.1
+icecream==2.2.0
+idna==3.19
 imgcat==0.6.0
 markdown-it-py==4.2.0
-mdurl==0.1.2
+durl==0.1.2
+music-tag @ https://github.com/koldinger/music-tag/archive/refs/tags/1.0.0.zip
 mutagen==1.48.1
-Pillow>=12.3.0
+pillow==12.3.0
 pyaml==26.7.0
-pydub @ git+https://github.com/koldinger/pydub
-Pygments==2.20.0
+pydub @ git+https://github.com/koldinger/pydub@1bcb4ca3d2055b34d6030174bf4252a4188b1f3b
+pygments==2.21.0
 python-magic==0.4.27
-PyYAML==6.0.3
+pyyaml==6.0.3
 regex==2026.7.19
 requests==2.34.2
 rich==15.0.0
 termcolor==3.3.0
-Unidecode==1.4.0
-music_tag @ https://github.com/koldinger/music-tag/archive/refs/tags/1.0.0.zip
+unidecode==1.4.0
+urllib3==2.7.0

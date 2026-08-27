@@ -50,9 +50,9 @@ from . import __version__
 
 # import pysnooper
 
-# from icecream import ic
-# ic.configureOutput(includeContext=True)
-# ic.disable()
+from icecream import ic
+ic.configureOutput(includeContext=True)
+ic.disable()
 
 class NotAudioException(Exception):
     """ Class to indicate a file is not an audio file """
@@ -217,6 +217,7 @@ def makeFName(file, tags):
         trk = f"{diskno}-{track.zfill(2)}"
     else:
         trk = noSlash(track).zfill(2)
+    ic(trk)
 
     #name = name + '.' + tags.get('track_name')
 
@@ -226,6 +227,7 @@ def makeFName(file, tags):
 
     #name = "{0}.{1}{2}".format(trk, munge(title)[0:m].strip(), f.suffix)
     name = f"{trk}.{munge(title)[0:maxlen]}{file.suffix}"
+    ic(name)
     log.debug(f"Name {file.name} -> {name}")
     return name
 
