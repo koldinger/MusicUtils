@@ -8,7 +8,7 @@ icecream==2.2.0
 idna==3.19
 imgcat==0.6.0
 markdown-it-py==4.2.0
-durl==0.1.2
+mdurl==0.1.2
 music-tag @ https://github.com/koldinger/music-tag/archive/refs/tags/1.0.0.zip
 mutagen==1.48.1
 pillow==12.3.0
