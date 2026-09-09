@@ -134,7 +134,7 @@ def parseArgs():
                             epilog=epilog,
                             formatter_class=RawDescriptionHelpFormatter)
     setGroup = parser.add_argument_group("Tag Setting Options")
-    setGroup.add_argument("--tags", "-t",     default=[], dest="tags", type=TagArgument, action="append", nargs="+", help="List of tags to apply.  Ex: --tags 'artist=The Beatles' 'album=Abbey Road'")
+    setGroup.add_argument("--tags", "-t",     default=[], dest="tags", type=TagArgument, action="append", nargs="+", metavar="TAG", help="List of tags to apply.  Ex: --tags 'artist=The Beatles' 'album=Abbey Road'")
     setGroup.add_argument("--delete", "-d",   type=TagArgument,  action="append", nargs="+", metavar="TAG", help="List of tags to delete.   Ex: --delete artist artistsort")
     setGroup.add_argument("--append", "-a",   action=BooleanOptionalAction, default=False, help="Add values to current tag")
     setGroup.add_argument("--clear", "-C",    action=BooleanOptionalAction, default=False, help="Remove all tags")
@@ -144,7 +144,7 @@ def parseArgs():
     setGroup.add_argument("--preserve", "-p", action=BooleanOptionalAction, default=False, help="Preserve timestamps")
     setGroup.add_argument("--backup", "-B",   action=BooleanOptionalAction, default=False, help="Save a backup of each file")
 
-    setGroup.add_argument("--edit",           nargs=3, dest="edit", default=[], action=EditAction, help="Edit tags using Python regular expressions")
+    setGroup.add_argument("--edit",           nargs=3, dest="edit", default=[], action=EditAction, metavar=("TAG", "MATCH", "REPLACE"), help="Edit tags using Python regular expressions")
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action="append", nargs="*", metavar="TAG", default=None, help="Print current tags (no changes made)")
