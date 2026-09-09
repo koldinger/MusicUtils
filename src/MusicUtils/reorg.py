@@ -305,17 +305,17 @@ def makeName(file, tags, dirname = None):
     log.debug(f"FullName {file} -> {newFile}")
     return newFile
 
-def dragFiles(dragfiles, destdir, length):
+def drag_files(dragfiles, destdir, length):
     action = actionName()
     if not length:
-        length = longestName(dragFiles)
+        length = longestName(drag_files)
     for file in dragfiles:
         dest = destdir.joinpath(file.name)
         if file.exists() and not dest.exists():
             log.log(logging.ACTION, f"{action} {file!s:{length}}\t==>  {dest}")
             doMove(file, dest)
 
-def setGroupMode(dest: Path, mode=None):
+def set_mode(dest: Path, mode=None):
     if mode is None:
         mode = args.mode
     if mode is not None:
@@ -328,7 +328,7 @@ def doMove(src, dest):
         if not dest.parent.exists():
             log.debug(f"Creating {dest.parent}")
             dest.parent.mkdir(parents=True, exist_ok=True)
-            setGroupMode(dest.parent, mode=dirmode)
+            set_mode(dest.parent, dirmode)
         elif not dest.parent.is_dir():
             #log.warning(f"{dest.parent} exists, and is not a directory")
             raise NotADirectoryError("{dest.parent} exists, and is not a directory")
@@ -346,7 +346,7 @@ def doMove(src, dest):
                 shutil.copy2(src, dest)
             case _:
                 raise ValueError(f"Unknown action: {args.action}")
-        setGroupMode(dest)
+        set_mode(dest, args.mode)
 
 
 def actionName():
@@ -468,7 +468,7 @@ def reorgDir(directory, recurse):
             dest = renameFile(finfo[0], finfo[1], dirname=composerStr, length=maxLen)
             if dest:
                 if dest.parent not in destdirs:
-                    dragFiles(dragfiles, dest.parent, maxLen)
+                    drag_files(dragfiles, dest.parent, maxLen)
                 destdirs[dest.parent] += 1
 
         if len(destdirs) > 1:
