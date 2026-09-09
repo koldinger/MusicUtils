@@ -58,13 +58,13 @@ defaults = {
     "alac": DefParams("alac", "ipod", None, ".alac", None),
     "flac": DefParams("flac", "flac", None, ".flac", None),
     "aiff": DefParams("pcm_s16be", "aiff", None, ".aiff", None),
-    "wav":  DefParams("pcm_s16le", "wav", None, ".wav", None)
+    "wav":  DefParams("pcm_s16le", "wav", None, ".wav", None),
 }
 
 formats = {
     "audio/flac" : "flac",
     "audio/mp3"  : "mp3",
-    "audio/x-m4a": "mp4"
+    "audio/x-m4a": "mp4",
     }
 
 inputtypes = {
@@ -76,13 +76,13 @@ inputtypes = {
             ".alac": "alac",
             ".ape": "ape",
             ".aiff": "aiff",
-            ".wav": "wav"
+            ".wav": "wav",
             }
 
 bitrates = {
             "mp3": "320k",
             "ipod": "92k",
-            "mp4": "128k"
+            "mp4": "128k",
            }
 
 
@@ -92,10 +92,10 @@ args = None
 def initLogging(verbosity) -> logging.Logger:
     handler = rich.logging.RichHandler(show_time=True, show_path=False, highlighter=rich.highlighter.NullHighlighter())
 
-    levels = [logging.WARN, logging.INFO, logging.DEBUG] #, logging.TRACE]
+    levels = [logging.WARNING, logging.INFO, logging.DEBUG] #, logging.TRACE]
     level = levels[min(len(levels)-1, verbosity)]        # capped to number of levels
 
-    log = colorlog.getLogger('reorg')
+    log = colorlog.getLogger("reorg")
     log.addHandler(handler)
     log.setLevel(level)
 
@@ -151,7 +151,7 @@ def convert(job):
     try:
         params = []
         if job.resample:
-            params = ['-af', 'aformat=sample_fmts=s16:sample_rates=44100']
+            params = ["-af", "aformat=sample_fmts=s16:sample_rates=44100"]
 
         if not args.dryrun:
             dest.parent.mkdir(parents=True, exist_ok=True)
@@ -188,31 +188,31 @@ def convert(job):
     return src, dest, None
 
 def processArgs():
-    _def = ' (default: %(default)s)'
+    _def = " (default: %(default)s)"
     processors = os.cpu_count()
 
     parser = argparse.ArgumentParser(description="Convert audio file formats", add_help=True)
 
-    parser.add_argument('--output',  '-o', type=str, choices=defaults.keys(), default='aac', help='List of files/directories to reorganize')
-    parser.add_argument('--format', '-f', dest='format', default=None,  help="Output Format" + _def)
-    parser.add_argument('--bitrate', '-b', dest='bitrate', type=str, default=None, help='Output bitrate' + _def)
-    parser.add_argument('--codec', '-c', dest='codec', type=str, default=None, help='Codec to use' + _def)
-    parser.add_argument('--cd', '-C', dest='cd', default=False, action=argparse.BooleanOptionalAction, help="Convert to CD resolution" + _def)
-    parser.add_argument('--suffix', '-s', dest='suffix', type=str, default=None, help='Suffix to use')
-    parser.add_argument('--copytags', '-t', dest='copytags', action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
-    parser.add_argument('--copytime', '-T', dest='copytime', action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
-    parser.add_argument('--overwrite', '-O', dest='overwrite', action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
-    parser.add_argument('--empty', '-E', dest='empty', action=argparse.BooleanOptionalAction, default=False, help='Overwrite empty files' + _def)
-    parser.add_argument('--workers', '-w', dest='workers', type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]",
+    parser.add_argument("--output",  "-o", type=str, choices=defaults.keys(), default="aac", help="List of files/directories to reorganize")
+    parser.add_argument("--format", "-f", dest="format", default=None,  help="Output Format" + _def)
+    parser.add_argument("--bitrate", "-b", dest="bitrate", type=str, default=None, help="Output bitrate" + _def)
+    parser.add_argument("--codec", "-c", dest="codec", type=str, default=None, help="Codec to use" + _def)
+    parser.add_argument("--cd", "-C", dest="cd", default=False, action=argparse.BooleanOptionalAction, help="Convert to CD resolution" + _def)
+    parser.add_argument("--suffix", "-s", dest="suffix", type=str, default=None, help="Suffix to use")
+    parser.add_argument("--copytags", "-t", dest="copytags", action=argparse.BooleanOptionalAction, default=True, help="Copy tags from the source to the destination" + _def)
+    parser.add_argument("--copytime", "-T", dest="copytime", action=argparse.BooleanOptionalAction, default=False, help="Copy time from the source to the destination" + _def)
+    parser.add_argument("--overwrite", "-O", dest="overwrite", action=argparse.BooleanOptionalAction, default=False, help="Overwrite files if they exist" + _def)
+    parser.add_argument("--empty", "-E", dest="empty", action=argparse.BooleanOptionalAction, default=False, help="Overwrite empty files" + _def)
+    parser.add_argument("--workers", "-w", dest="workers", type=int, default=int(processors/2), choices=range(1, processors+1), metavar=f"[1-{processors}]",
                         help="Number of concurrent jobs to use" + _def)
-    parser.add_argument('--dry-run', '-n', dest='dryrun', action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
-    parser.add_argument('--progress', '-p', dest='progress', action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
-    parser.add_argument('--verbose', '-v', dest='verbose', action='count', default=0, help='Increase the verbosity')
+    parser.add_argument("--dry-run", "-n", dest="dryrun", action=argparse.BooleanOptionalAction, default=False, help="Dry Run.   Don't actually write output")
+    parser.add_argument("--progress", "-p", dest="progress", action=argparse.BooleanOptionalAction, default=True, help="Show a progress bar" +  _def)
+    parser.add_argument("--verbose", "-v", dest="verbose", action="count", default=0, help="Increase the verbosity")
 
     parser.add_argument("--version", "-V", action="version", version=__version__, help="Print the version")
 
-    parser.add_argument('srcdir',  type=pathlib.Path, help='Root input directory')
-    parser.add_argument('destdir', type=pathlib.Path, help='Root output directory')
+    parser.add_argument("srcdir",  type=pathlib.Path, help="Root input directory")
+    parser.add_argument("destdir", type=pathlib.Path, help="Root output directory")
 
     return parser.parse_args()
 
