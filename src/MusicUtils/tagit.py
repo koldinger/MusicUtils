@@ -41,7 +41,7 @@ import sys
 import textwrap
 import urllib.parse
 from argparse import (SUPPRESS, ArgumentParser, ArgumentTypeError,
-                      BooleanOptionalAction, FileType,
+                      Action, BooleanOptionalAction, FileType,
                       RawDescriptionHelpFormatter)
 from functools import lru_cache, partial
 from hashlib import md5
@@ -114,6 +114,16 @@ def checkTag(tag, additional=None):
 def checkTagAll(tag):
     return checkTag(tag, additional=["ALL"])
 
+class EditAction(Action):
+    def __call__(self, _parser,  namespace, values, _option_string=None):
+        tag, m_pat, r_pat = values
+        tag = checkTag(tag)
+        items = getattr(namespace, self.dest, None)
+        if items is None:
+            items = []
+        items.append([tag, m_pat, r_pat])
+        setattr(namespace, self.dest, items)
+
 def parseArgs():
     epilog = "Tags can also be set with an option like --ARTIST xxx to set the artist tag to xxx.\n\n"\
              "Valid tags are: \n"\
@@ -132,7 +142,9 @@ def parseArgs():
     setGroup.add_argument("--split",          type=checkTagAll, nargs="*", action="append", metavar="TAG", default=None, help="List of tags to apply splitting to")
     setGroup.add_argument("--splitchars",     type=str,  default=";/", help="List of characters to use to split tags")
     setGroup.add_argument("--preserve", "-p", action=BooleanOptionalAction, default=False, help="Preserve timestamps")
-    setGroup.add_argument("--backup", "-B", action=BooleanOptionalAction, default=False, help="Save a backup of each file")
+    setGroup.add_argument("--backup", "-B",   action=BooleanOptionalAction, default=False, help="Save a backup of each file")
+
+    setGroup.add_argument("--edit",           nargs=3, dest="edit", default=[], action=EditAction, help="Edit tags using Python regular expressions")
 
     printGroup = parser.add_argument_group("Printing Options")
     printGroup.add_argument("--print", "-P",    type=checkTag,  action="append", nargs="*", metavar="TAG", default=None, help="Print current tags (no changes made)")
@@ -241,7 +253,28 @@ def checkFile(file):
 
 stats = { "processed": 0, "updated"  : 0, "added"    : 0, "changed"  : 0, "deleted"  : 0, "split": 0 }
 
-def processFile(file, tags, splits, delete, preserve, append, empty, splitchars, dryrun, backup):
+def processEdit(edit, data):
+    if len(edit) != 3:
+        raise ValueError(f"Invalid edit specification {edit}")
+
+    tag, match, replace = edit
+    tag = tag.lower()
+    old_values = data[tag]
+    changes = []
+    if old_values:
+        new_values = []
+        for v in old_values.values:
+            nv, c = re.subn(match, replace, v)
+            new_values.append(nv)
+            changes.append(c)
+        data[tag] = new_values
+        if any(changes):
+            qprint(f"    Changing tag {tag.upper()} to {new_values}")
+            stats["changed"] += 1
+    return any(changes)
+
+
+def processFile(file, tags, splits, delete, edits, preserve, append, empty, splitchars, dryrun, backup):
     """
     Process a file, changing the tags appropriately.
 
@@ -309,6 +342,11 @@ def processFile(file, tags, splits, delete, preserve, append, empty, splitchars,
             #traceback.print_exc()
         except ValueError as v:
             cprint(v, "red", file=sys.stderr)
+
+    if edits:
+        for e in edits:
+            if processEdit(e, data):
+                updated = True
 
     splitpat = f"[{splitchars}]"
     if splits:
@@ -519,7 +557,7 @@ def main():
     else:
         files = args.files
 
-    if args.print or not (args.tags or args.delete or args.clear or args.empty or args.split or args.extract):
+    if args.print or not any([args.tags, args.delete, args.clear, args.empty, args.split, args.edit, args.extract]):
         # Printing files.   Compute the tags to print, then print 'em
         printtags = []
         if args.print:
@@ -570,7 +608,7 @@ def main():
         delete = flatten(args.delete)
 
         for file in files:
-            data = processFile(file, tags, splits, delete, args.preserve, args.append, args.empty, args.splitchars, args.dryrun, args.backup)
+            data = processFile(file, tags, splits, delete, args.edit, args.preserve, args.append, args.empty, args.splitchars, args.dryrun, args.backup)
             if args.save and data:
                 saveTags(file, data, args.fullpath, args.relative)
 
