@@ -17,7 +17,7 @@ pydub @ git+https://github.com/koldinger/pydub@1bcb4ca3d2055b34d6030174bf4252a41
 pygments==2.21.0
 python-magic==0.4.27
 pyyaml==6.0.3
-regex==2026.7.19
+regex==2026.9.3
 requests==2.34.2
 rich==15.0.0
 termcolor==3.3.0
