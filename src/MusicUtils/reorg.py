@@ -170,14 +170,16 @@ def munge(name):
     name = re.sub(r"[^\P{Punct}-,_]", "", name)
     # Remove all control characters (what the f**k are these doing in a name anyhow?)
     name = re.sub(r"[\p{Cntrl}]", "", name)
+    # Remove articles, if so desired.
+    if not args.useArticle:
+        name = re.sub(r"^(The|A|An)\s+", "", name)
     # Convert all spaces to underscores
     name = re.sub(r"\s", "_", name)
     # Convert multiple underscores to a single underscore
     name = re.sub(r"_+", "_", name)
-    # Re
-    if not args.useArticle:
-        name = re.sub(r"^(The|A|An)\s+", "", name)
+    # Strip any at the start or end of the name.
     name = name.strip("_")
+    ic(name)
     return name
 
 
