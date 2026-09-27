@@ -57,7 +57,7 @@ from termcolor import colored, cprint
 from .Utils import isAudio
 from . import __version__
 
-from icecream import ic
+# from icecream import ic
 
 # Extract the list of valid tags from the music_tag module.
 ALL_TAGS = sorted(music_tag.tags())
@@ -303,12 +303,15 @@ def processFile(file, tags, splits, delete, edits, preserve, append, empty, spli
     for tag in tags:
         try:
             if tag.lower() == "artwork":
-                values = list(map(music_tag.file.Artwork, map(readfile, tags[tag])))
+                #values = list(map(music_tag.file.Artwork, map(readfile, tags[tag])))
+                values = [readfile(v) for v in tags[tag]]
             else:
                 values = tags[tag]
 
             try:
-                curVals = set(data[tag].values)
+                #curVals = set([str(v) for v in data[tag].values])
+                # Convert it to a set of strings, as the new values will be that.
+                curVals = {str(v) for v in data[tag].values}
             except ValueError as e:
                 cprint(f"{e}: zeroing", "red")
                 curVals = set()
@@ -323,9 +326,10 @@ def processFile(file, tags, splits, delete, edits, preserve, append, empty, spli
                 # if nothing has changed, skip it.
                 continue
 
+
             if tag.lower() == "artwork":
                 # If we're doing artwork, generate a readable version and print it, other than the raw value
-                vals = list(set(map(imageInfo, tags[tag])).union(map(str, data[tag].values))) if append else list(map(imageInfo, tags[tag]))
+                vals = list({imageInfo(i) for i in tags[tag]}.union({str(i) for i in data[tag].values})) if append else [imageInfo(i) for i in tags[tag]]
                 qprint(f"    Setting tag {tag.upper()} to {vals}")
             else:
                 # Otherwise, just print the new values
@@ -553,7 +557,7 @@ def main():
 
     # If there's only one file, and it's a directory, list it
     if len(args.files) == 1 and args.files[0].is_dir():
-        files = sorted(args.files[0].iterdir())
+        files = sorted([f for f in args.files[0].iterdir() if isAudio(f)])
     else:
         files = args.files
 
